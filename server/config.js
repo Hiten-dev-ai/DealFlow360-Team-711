@@ -1,3 +1,6 @@
+import { realpathSync } from 'node:fs';
+import { basename } from 'node:path';
+
 const DEFAULT_WORKSPACE_ID = '00000000-0000-4000-8000-000000000711';
 
 export function getConfig(env = process.env) {
@@ -15,7 +18,7 @@ export function getConfig(env = process.env) {
     sessionAbsoluteMs: 8 * 60 * 60 * 1000,
     invitationMs: 48 * 60 * 60 * 1000,
     portalLinkMs: 30 * 60 * 1000,
-    releaseId: env.RELEASE_ID ?? 'development',
+    releaseId: env.RELEASE_ID ?? basename(realpathSync(process.cwd())),
     smtpUrl: env.SMTP_URL ?? null,
     mailFrom: env.MAIL_FROM ?? 'DealFlow360 <no-reply@dealflow360.athergrid.dev>',
     secureCookies: nodeEnv === 'production',
