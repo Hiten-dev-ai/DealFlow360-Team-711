@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
 import { flushSync } from 'react-dom';
 import {
-  Activity, Bell, BellOff, CheckCheck, CheckCircle2, ChevronRight, ClipboardCheck, ClipboardList,
+  Activity, ArrowLeft, Bell, BellOff, CheckCheck, CheckCircle2, ChevronRight, ClipboardCheck, ClipboardList,
   FileBarChart, FileText, HeartPulse, LayoutDashboard, LogOut, Menu, Moon,
   PackageCheck, Search, Settings, ShieldAlert, Sun, Trash2, WalletCards, Workflow, X,
 } from 'lucide-react';
-import { APP_NAME, TEAM_NAME } from '../../app-meta';
+import { APP_NAME } from '../../app-meta';
 import type { DummyAccount } from '../../lib/dummy-accounts';
 import type { NotificationPreferences } from '../../lib/preferences';
 import { Modal } from '../ui/Modal';
@@ -266,11 +266,10 @@ export function AppShell({ activeView, children, user, resolvedTheme, notificati
       <aside className={`workspace-sidebar ${mobileOpen ? 'mobile-open' : ''}`} aria-label="Primary navigation">
         <div className="sidebar-brand">
           <span className="sidebar-logo"><Workflow size={22} /></span>
-          <span className="sidebar-brand-copy"><strong>{APP_NAME}</strong><small>{TEAM_NAME}</small></span>
+          <span className="sidebar-brand-copy"><strong>{APP_NAME}</strong></span>
           <button type="button" className="drawer-close" onClick={() => setMobileOpen(false)} aria-label="Close navigation"><X size={19} /></button>
         </div>
         <nav className="sidebar-navigation">
-          <span className="sidebar-section-label">Workspace</span>
           {APP_NAVIGATION.map((item) => {
             const Icon = item.icon;
             const active = activeView === item.id;
@@ -301,7 +300,7 @@ export function AppShell({ activeView, children, user, resolvedTheme, notificati
         <header className="workspace-topbar">
           <div className="topbar-title-group">
             <button type="button" className="mobile-menu" onClick={() => setMobileOpen(true)} aria-label="Open navigation"><Menu size={21} /></button>
-            <div><span>{TEAM_NAME}</span><h1>{titles[activeView]}</h1></div>
+            <div><h1>{titles[activeView]}</h1></div>
           </div>
           <div className="topbar-search-wrap" onBlur={(event) => {
             if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
@@ -357,8 +356,9 @@ export function AppShell({ activeView, children, user, resolvedTheme, notificati
       <button type="button" className={`action-center-overlay ${notificationsOpen ? 'open' : ''}`} aria-label="Close notifications" tabIndex={notificationsOpen ? 0 : -1} onClick={() => setNotificationsOpen(false)} />
       <aside className={`action-center ${notificationsOpen ? 'open' : ''}`} aria-hidden={!notificationsOpen} inert={!notificationsOpen}>
         <header className="action-center-header">
-          <div><span>Action center</span><h2>Notifications</h2></div>
-          <div>
+          <button type="button" className="action-center-mobile-back" onClick={() => setNotificationsOpen(false)} aria-label="Back"><ArrowLeft size={19} /></button>
+          <div className="action-center-title"><span>Action center</span><h2>Notifications</h2></div>
+          <div className="action-center-actions">
             {notifications.length > 0 && <button type="button" className="action-text-button" onClick={() => setNotifications((items) => items.map((item) => ({ ...item, read: true })))}><CheckCheck size={15} /> Read all</button>}
             {notifications.length > 0 && <button type="button" className="action-text-button" onClick={() => setNotifications([])}><Trash2 size={15} /> Clear</button>}
             <button type="button" className="icon-control" onClick={() => setNotificationsOpen(false)} aria-label="Close notification panel"><X size={17} /></button>
