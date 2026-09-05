@@ -638,7 +638,7 @@ button.record-row { cursor: pointer; }
 @keyframes panel-in { from { opacity: 0; transform: translateY(-5px) scale(.98); } }
 @keyframes modal-in { from { opacity: 0; transform: translateY(8px) scale(.985); } }
 
-@keyframes page-in { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: none; } }
+@keyframes page-in { from { opacity: 0; } to { opacity: 1; } }
 
 .search-transition-source,
 .search-transition-target { view-transition-name: dealflow-workspace-search; }
