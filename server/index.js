@@ -1,14 +1,15 @@
 import { serve } from '@hono/node-server';
-import { Hono } from 'hono';
+import { createApp } from './app.js';
 
-const app = new Hono();
-
-app.get('/api/health', (c) => c.json({
-  service: 'dealflow360',
-  status: 'ok',
-}));
-
-const port = Number(process.env.PORT ?? 4173);
-serve({ fetch: app.fetch, hostname: '127.0.0.1', port }, (info) => {
+const { app, config, store } = createApp();
+const server = serve({ fetch: app.fetch, hostname: config.host, port: config.port }, (info) => {
   console.log(`DealFlow360 API listening on http://${info.address}:${info.port}`);
 });
+
+for (const signal of ['SIGINT', 'SIGTERM']) {
+  process.on(signal, async () => {
+    server.close();
+    await store.close();
+    process.exit(0);
+  });
+}
