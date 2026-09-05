@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import {
   AlertTriangle,
   ArrowRight,
@@ -29,6 +29,7 @@ import { statusTone } from "../lib/demo-data";
 import { useWorkspace } from "../lib/workspace";
 
 type Row = Record<string, unknown>;
+interface SearchFocusProps { focusId?: string | null; focusRequest?: number }
 const text = (value: unknown) => String(value ?? "");
 const amount = (value: unknown) => Number(value ?? 0);
 const formatMoney = (minor: unknown) =>
@@ -126,7 +127,7 @@ function ErrorText({ value }: { value: string }) {
   ) : null;
 }
 
-export function QuotationsView() {
+export function QuotationsView({ focusId, focusRequest }: SearchFocusProps) {
   const { data, connection, role, run } = useWorkspace();
   const canEdit = role !== "finance_ops";
   const quotations = data.quotes;
@@ -137,6 +138,9 @@ export function QuotationsView() {
   const [error, setError] = useState("");
   const [portalLink, setPortalLink] = useState("");
   const selected = quotations.find((quote) => quote.id === selectedId);
+  useEffect(() => {
+    if (focusId && quotations.some((quote) => text(quote.id) === focusId)) setSelectedId(focusId);
+  }, [focusId, focusRequest, quotations]);
   const filtered = useMemo(
     () =>
       quotations.filter(
@@ -471,13 +475,16 @@ export function QuotationsView() {
   );
 }
 
-export function ApprovalsView() {
+export function ApprovalsView({ focusId, focusRequest }: SearchFocusProps) {
   const { data, connection, run } = useWorkspace();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [stage, setStage] = useState("all");
   const [error, setError] = useState("");
   const selected = data.approvals.find((record) => record.id === selectedId);
+  useEffect(() => {
+    if (focusId && data.approvals.some((record) => text(record.id) === focusId)) setSelectedId(focusId);
+  }, [data.approvals, focusId, focusRequest]);
   const filtered = useMemo(
     () => data.approvals.filter((record) =>
       `${text(record.quoteNumber)} ${text(record.customer)}`.toLowerCase().includes(query.toLowerCase())
@@ -848,7 +855,7 @@ export function SubscriptionsView() {
   );
 }
 
-export function InvoicesView() {
+export function InvoicesView({ focusId, focusRequest }: SearchFocusProps) {
   const { data, connection, run } = useWorkspace();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [ledgerOpen, setLedgerOpen] = useState(false);
@@ -857,6 +864,9 @@ export function InvoicesView() {
   const [status, setStatus] = useState("all");
   const [error, setError] = useState("");
   const selected = data.invoices.find((item) => item.id === selectedId);
+  useEffect(() => {
+    if (focusId && data.invoices.some((item) => text(item.id) === focusId)) setSelectedId(focusId);
+  }, [data.invoices, focusId, focusRequest]);
   const filtered = useMemo(
     () => data.invoices.filter((item) =>
       `${text(item.invoiceNumber)} ${text(item.customer)}`.toLowerCase().includes(query.toLowerCase())
@@ -1040,7 +1050,7 @@ export function InvoicesView() {
   );
 }
 
-export function DealHealthView() {
+export function DealHealthView({ focusId, focusRequest }: SearchFocusProps) {
   const { data } = useWorkspace();
   const [query, setQuery] = useState("");
   const [severity, setSeverity] = useState("all");
@@ -1048,6 +1058,9 @@ export function DealHealthView() {
   const high = data.alerts.filter((alert) => alert.severity === "high").length;
   const score = Math.max(0, 100 - high * 8 - (data.alerts.length - high) * 3);
   const selected = data.alerts.find((alert) => text(alert.id) === selectedId);
+  useEffect(() => {
+    if (focusId && data.alerts.some((alert) => text(alert.id) === focusId)) setSelectedId(focusId);
+  }, [data.alerts, focusId, focusRequest]);
   const filteredAlerts = useMemo(() => data.alerts.filter((alert) =>
     `${text(alert.title)} ${text(alert.message)} ${text(alert.category)}`.toLowerCase().includes(query.toLowerCase())
     && (severity === "all" || text(alert.severity) === severity),

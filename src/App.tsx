@@ -98,6 +98,7 @@ export default function App() {
     useState<AppView>("dashboard");
   const [settingsCategory, setSettingsCategory] =
     useState<SettingsCategory | null>(null);
+  const [recordTarget, setRecordTarget] = useState<{ view: AppView; id: string; request: number } | null>(null);
   const [theme, setTheme] = useState<ThemeMode>(
     () =>
       (localStorage.getItem("dealflow360.theme") as ThemeMode | null) ?? "dark",
@@ -251,10 +252,11 @@ export default function App() {
       setActiveView("dashboard");
     }
   };
-  const navigate = (view: AppView, nextSettingsCategory?: SettingsCategory) => {
+  const navigate = (view: AppView, nextSettingsCategory?: SettingsCategory, recordId?: string) => {
     if (view === "settings" && activeView !== "settings")
       setLastWorkspaceView(activeView);
     setSettingsCategory(nextSettingsCategory ?? null);
+    setRecordTarget(recordId ? { view, id: recordId, request: Date.now() } : null);
     setActiveView(view);
   };
   const updateNotificationPreferences = (
@@ -307,14 +309,14 @@ export default function App() {
 
   const views: Record<AppView, ReactNode> = {
     dashboard: <OverviewView onNavigate={navigate} />,
-    quotations: <QuotationsView />,
-    approvals: <ApprovalsView />,
+    quotations: <QuotationsView focusId={recordTarget?.view === "quotations" ? recordTarget.id : null} focusRequest={recordTarget?.request} />,
+    approvals: <ApprovalsView focusId={recordTarget?.view === "approvals" ? recordTarget.id : null} focusRequest={recordTarget?.request} />,
     fulfillment: <FulfillmentView />,
     subscriptions: <SubscriptionsView />,
-    invoices: <InvoicesView />,
-    health: <DealHealthView />,
+    invoices: <InvoicesView focusId={recordTarget?.view === "invoices" ? recordTarget.id : null} focusRequest={recordTarget?.request} />,
+    health: <DealHealthView focusId={recordTarget?.view === "health" ? recordTarget.id : null} focusRequest={recordTarget?.request} />,
     reports: <ReportsView />,
-    teams: <TeamsView user={user} />,
+    teams: <TeamsView user={user} focusId={recordTarget?.view === "teams" ? recordTarget.id : null} focusRequest={recordTarget?.request} />,
     settings: (
       <SettingsView
         user={user}

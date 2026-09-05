@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import {
   ArrowLeft,
   ChevronRight,
@@ -34,7 +34,7 @@ const teamFilterOptions: SelectOption[] = [
   { value: "unmanaged", label: "Needs manager" },
 ];
 
-export function TeamsView({ user }: { user: SessionUser }) {
+export function TeamsView({ user, focusId, focusRequest }: { user: SessionUser; focusId?: string | null; focusRequest?: number }) {
   const { data, connection, run } = useWorkspace();
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -45,6 +45,9 @@ export function TeamsView({ user }: { user: SessionUser }) {
   const [result, setResult] = useState("");
   const [error, setError] = useState("");
   const selectedTeam = data.teams.find((team) => String(team.id) === selectedTeamId);
+  useEffect(() => {
+    if (focusId && data.teams.some((team) => String(team.id) === focusId)) setSelectedTeamId(focusId);
+  }, [data.teams, focusId, focusRequest]);
   const filteredTeams = useMemo(() => data.teams.filter((team) => {
     const members = (team.members as Row[]) ?? [];
     const matchesQuery = `${String(team.name)} ${members.map((member) => `${member.fullName} ${member.email}`).join(" ")}`.toLowerCase().includes(query.toLowerCase());

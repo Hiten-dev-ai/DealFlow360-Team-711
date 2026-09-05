@@ -38,9 +38,10 @@ import {
   WalletCards,
   Workflow,
   X,
+  type LucideIcon,
 } from "lucide-react";
 import { APP_NAME } from "../../app-meta";
-import { mutate, type SessionUser } from "../../lib/api";
+import { mutate, type SessionUser, type WorkspaceData } from "../../lib/api";
 import type { NotificationPreferences } from "../../lib/preferences";
 import { useWorkspace, type ConnectionState } from "../../lib/workspace";
 import type { SettingsCategory } from "../../views/SettingsView";
@@ -67,7 +68,7 @@ interface AppShellProps {
   syncedAt: string | null;
   notifications: Array<Record<string, unknown>>;
   notificationPreferences: NotificationPreferences;
-  onNavigate: (view: AppView, settingsCategory?: SettingsCategory) => void;
+  onNavigate: (view: AppView, settingsCategory?: SettingsCategory, recordId?: string) => void;
   onSettingsBack: () => void;
   onToggleTheme: () => void;
   onNotificationPreferencesChange: (
@@ -150,7 +151,20 @@ export function isViewAvailable(view: AppView, role: SessionUser["activeRole"]) 
   return ROLE_NAVIGATION[role].includes(view);
 }
 
-const WORKSPACE_SEARCH_ITEMS = [
+interface WorkspaceSearchItem {
+  key: string;
+  view: AppView;
+  settingsCategory?: SettingsCategory;
+  recordId?: string;
+  label: string;
+  hint: string;
+  searchText?: string;
+  icon: LucideIcon;
+  type: string;
+  adminOnly?: boolean;
+}
+
+const WORKSPACE_SEARCH_ITEMS: WorkspaceSearchItem[] = [
   ...APP_NAVIGATION.map((item) => ({
     key: `view-${item.id}`,
     view: item.id,
@@ -230,11 +244,110 @@ const WORKSPACE_SEARCH_ITEMS = [
   },
 ];
 
-type WorkspaceSearchItem = (typeof WORKSPACE_SEARCH_ITEMS)[number];
+function contextualSearchItems(data: WorkspaceData): WorkspaceSearchItem[] {
+  const items: WorkspaceSearchItem[] = [];
+  for (const quote of data.quotes) {
+    const lineContext = Array.isArray(quote.lines)
+      ? quote.lines
+          .map((line) => {
+            const record = line as Record<string, unknown>;
+            return `${String(record.product ?? "")} ${String(record.sku ?? "")}`;
+          })
+          .join(" ")
+      : "";
+    items.push({
+      key: `quote-${String(quote.id)}`,
+      view: "quotations",
+      recordId: String(quote.id),
+      label: `${String(quote.quoteNumber)} · ${String(quote.customer)}`,
+      hint: `${String(quote.owner)} · ${String(quote.status).replaceAll("_", " ")} · ${String(quote.tier)}`,
+      searchText: `quotation quote deal ${String(quote.quoteNumber)} ${String(quote.customer)} ${String(quote.owner)} ${String(quote.status)} ${String(quote.tier)} ${String(quote.team ?? "")} ${lineContext}`,
+      icon: ClipboardList,
+      type: "Quotation",
+    });
+  }
+  for (const approval of data.approvals) items.push({
+    key: `approval-${String(approval.id)}`,
+    view: "approvals",
+    recordId: String(approval.id),
+    label: `Q-${String(approval.quoteNumber)} · ${String(approval.customer)}`,
+    hint: `${String(approval.stage)} approval · Risk ${String(approval.riskScore)}`,
+    searchText: `approval review ${String(approval.quoteNumber)} ${String(approval.customer)} ${String(approval.stage)}`,
+    icon: ClipboardCheck,
+    type: "Approval",
+  });
+  for (const invoice of data.invoices) items.push({
+    key: `invoice-${String(invoice.id)}`,
+    view: "invoices",
+    recordId: String(invoice.id),
+    label: `INV-${String(invoice.invoiceNumber)} · ${String(invoice.customer)}`,
+    hint: `${String(invoice.status).replaceAll("_", " ")} · Due ${String(invoice.dueOn)}`,
+    searchText: `invoice billing payment ${String(invoice.invoiceNumber)} ${String(invoice.customer)} ${String(invoice.status)}`,
+    icon: FileText,
+    type: "Invoice",
+  });
+  for (const payment of data.payments) items.push({
+    key: `payment-${String(payment.id)}`,
+    view: "invoices",
+    recordId: String(payment.invoiceId),
+    label: `${String(payment.reference || "Payment")} · ${String(payment.customer)}`,
+    hint: `Invoice ${String(payment.invoiceNumber)} · Payment ledger`,
+    searchText: `payment ledger receipt transaction ${String(payment.reference ?? "")} ${String(payment.invoiceNumber)} ${String(payment.customer)} ${String(payment.recordedBy ?? "")}`,
+    icon: WalletCards,
+    type: "Payment",
+  });
+  for (const order of data.fulfillment) {
+    const shipments = Array.isArray(order.shipments) ? order.shipments : [];
+    const warehouseContext = shipments
+      .map((shipment) => String((shipment as Record<string, unknown>).warehouse ?? "Backorder"))
+      .join(" ");
+    items.push({
+      key: `fulfillment-${String(order.id)}`,
+      view: "fulfillment",
+      label: `Q-${String(order.quoteNumber)} · ${String(order.customer)}`,
+      hint: `${String(order.status).replaceAll("_", " ")} · ${shipments.length} shipment${shipments.length === 1 ? "" : "s"}`,
+      searchText: `fulfillment allocation shipment warehouse backorder ${String(order.quoteNumber)} ${String(order.customer)} ${String(order.status)} ${warehouseContext}`,
+      icon: PackageCheck,
+      type: "Fulfillment",
+    });
+  }
+  for (const subscription of data.subscriptions) items.push({
+    key: `subscription-${String(subscription.id)}`,
+    view: "subscriptions",
+    label: `${String(subscription.customer)} · ${String(subscription.plan)}`,
+    hint: `${String(subscription.status).replaceAll("_", " ")} · ${String(subscription.cadence)}`,
+    searchText: `subscription recurring renewal plan ${String(subscription.customer)} ${String(subscription.plan)} ${String(subscription.status)} ${String(subscription.cadence)}`,
+    icon: WalletCards,
+    type: "Subscription",
+  });
+  for (const alert of data.alerts) items.push({
+    key: `alert-${String(alert.id)}`,
+    view: "health",
+    recordId: String(alert.id),
+    label: `${String(alert.title)} · Q-${String(alert.quoteNumber)}`,
+    hint: `${String(alert.customer)} · ${String(alert.severity)} · ${String(alert.category)}`,
+    searchText: `deal health risk alert ${String(alert.title)} ${String(alert.message)} ${String(alert.customer)} ${String(alert.quoteNumber)} ${String(alert.owner ?? "")}`,
+    icon: HeartPulse,
+    type: "Signal",
+  });
+  for (const team of data.teams) items.push({
+    key: `team-${String(team.id)}`,
+    view: "teams",
+    recordId: String(team.id),
+    label: String(team.name),
+    hint: `${Array.isArray(team.members) ? team.members.length : 0} people · Sales team`,
+    searchText: `team hierarchy people ${String(team.name)} ${Array.isArray(team.members) ? team.members.map((member) => `${String(member.fullName)} ${String(member.email)}`).join(" ") : ""}`,
+    icon: Users,
+    type: "Team",
+    adminOnly: true,
+  });
+  return items;
+}
 
-function searchWorkspace(query: string, role: SessionUser["activeRole"]): WorkspaceSearchItem[] {
+export function searchWorkspace(query: string, role: SessionUser["activeRole"], data: WorkspaceData): WorkspaceSearchItem[] {
   const normalized = query.trim().toLowerCase();
-  const allowedItems = WORKSPACE_SEARCH_ITEMS.filter((item) =>
+  const terms = normalized.split(/\s+/).filter(Boolean).map((term) => term.length > 3 && term.endsWith("s") ? term.slice(0, -1) : term);
+  const allowedItems = [...WORKSPACE_SEARCH_ITEMS, ...contextualSearchItems(data)].filter((item) =>
     isViewAvailable(item.view, role)
     && (!("adminOnly" in item) || !item.adminOnly || role === "admin"),
   );
@@ -243,6 +356,8 @@ function searchWorkspace(query: string, role: SessionUser["activeRole"]): Worksp
     .map((item) => {
       const label = item.label.toLowerCase();
       const hint = item.hint.toLowerCase();
+      const searchText = item.searchText?.toLowerCase() ?? "";
+      const haystack = `${label} ${hint} ${item.type.toLowerCase()} ${searchText}`;
       const score =
         label === normalized
           ? 0
@@ -250,7 +365,7 @@ function searchWorkspace(query: string, role: SessionUser["activeRole"]): Worksp
             ? 1
             : label.includes(normalized)
               ? 2
-              : hint.includes(normalized)
+              : terms.every((term) => haystack.includes(term))
                 ? 3
                 : -1;
       return { item, score };
@@ -357,8 +472,8 @@ export function AppShell({
   const searchDialogInput = useRef<HTMLInputElement>(null);
   const searchOpening = useRef(false);
   const fullSearchResults = useMemo(
-    () => searchWorkspace(searchQuery, user.activeRole),
-    [searchQuery, user.activeRole],
+    () => searchWorkspace(searchQuery, user.activeRole, workspace.data),
+    [searchQuery, user.activeRole, workspace.data],
   );
   const searchHasMore = fullSearchResults.length > 4;
   const connectionLabel =
@@ -429,13 +544,13 @@ export function AppShell({
     setSearchLoading(true);
     const timer = window.setTimeout(() => {
       setSearchSuggestions(
-        searchWorkspace(searchQuery, user.activeRole).slice(0, 4),
+        searchWorkspace(searchQuery, user.activeRole, workspace.data).slice(0, 4),
       );
       setSearchActiveIndex(-1);
       setSearchLoading(false);
     }, 150);
     return () => window.clearTimeout(timer);
-  }, [searchFocused, searchOpen, searchQuery, user.activeRole]);
+  }, [searchFocused, searchOpen, searchQuery, user.activeRole, workspace.data]);
 
   useEffect(() => {
     if (!searchOpen) return;
@@ -460,8 +575,8 @@ export function AppShell({
     [serverNotifications],
   );
 
-  const navigate = (view: AppView, settingsCategory?: SettingsCategory) => {
-    onNavigate(isViewAvailable(view, user.activeRole) ? view : "dashboard", settingsCategory);
+  const navigate = (view: AppView, settingsCategory?: SettingsCategory, recordId?: string) => {
+    onNavigate(isViewAvailable(view, user.activeRole) ? view : "dashboard", settingsCategory, recordId);
     setMobileOpen(false);
     setNotificationsOpen(false);
   };
@@ -480,6 +595,7 @@ export function AppShell({
     navigate(
       item.view,
       "settingsCategory" in item ? item.settingsCategory : undefined,
+      item.recordId,
     );
     setSearchOpen(false);
     resetSearch();
