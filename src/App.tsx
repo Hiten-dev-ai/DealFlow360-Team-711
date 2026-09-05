@@ -4,7 +4,7 @@ import { findDummyAccount, type DummyAccount } from './lib/dummy-accounts';
 import { DEFAULT_NOTIFICATION_PREFERENCES, type NotificationPreferences } from './lib/preferences';
 import { LoginPage } from './views/LoginPage';
 import { OverviewView } from './views/OverviewView';
-import { SettingsView, type Accent, type ThemeMode } from './views/SettingsView';
+import { SettingsView, type Accent, type SettingsCategory, type ThemeMode } from './views/SettingsView';
 import {
   ApprovalsView,
   DealHealthView,
@@ -30,6 +30,7 @@ function App() {
   const [user, setUser] = useState<DummyAccount | null>(() => findDummyAccount(sessionStorage.getItem(USER_SESSION_KEY)));
   const [activeView, setActiveView] = useState<AppView>('dashboard');
   const [lastWorkspaceView, setLastWorkspaceView] = useState<AppView>('dashboard');
+  const [settingsCategory, setSettingsCategory] = useState<SettingsCategory | null>(null);
   const [theme, setTheme] = useState<ThemeMode>(() => (localStorage.getItem('dealflow360.theme') as ThemeMode | null) ?? 'dark');
   const [accent, setAccent] = useState<Accent>(loadAccent);
   const [notificationPreferences, setNotificationPreferences] = useState<NotificationPreferences>(() => {
@@ -66,8 +67,9 @@ function App() {
     setUser(null);
   };
 
-  const navigate = (view: AppView) => {
+  const navigate = (view: AppView, nextSettingsCategory?: SettingsCategory) => {
     if (view === 'settings' && activeView !== 'settings') setLastWorkspaceView(activeView);
+    setSettingsCategory(nextSettingsCategory ?? null);
     setActiveView(view);
   };
 
@@ -86,7 +88,7 @@ function App() {
     invoices: <InvoicesView />,
     health: <DealHealthView />,
     reports: <ReportsView />,
-    settings: <SettingsView user={user} theme={theme} accent={accent} notificationPreferences={notificationPreferences} onBack={() => navigate(lastWorkspaceView)} onThemeChange={setTheme} onAccentChange={setAccent} onNotificationPreferencesChange={updateNotificationPreferences} />,
+    settings: <SettingsView user={user} theme={theme} accent={accent} initialCategory={settingsCategory} notificationPreferences={notificationPreferences} onBack={() => navigate(lastWorkspaceView)} onThemeChange={setTheme} onAccentChange={setAccent} onNotificationPreferencesChange={updateNotificationPreferences} />,
   };
 
   return (
@@ -96,6 +98,7 @@ function App() {
       resolvedTheme={resolvedTheme}
       notificationPreferences={notificationPreferences}
       onNavigate={navigate}
+      onSettingsBack={() => navigate(lastWorkspaceView)}
       onToggleTheme={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
       onNotificationPreferencesChange={updateNotificationPreferences}
       onLogout={logout}

@@ -3,11 +3,12 @@ import { flushSync } from 'react-dom';
 import {
   Activity, ArrowLeft, Bell, BellOff, CheckCheck, CheckCircle2, ChevronRight, ClipboardCheck, ClipboardList,
   FileBarChart, FileText, HeartPulse, LayoutDashboard, LogOut, Menu, Moon,
-  PackageCheck, Search, Settings, ShieldAlert, Sun, Trash2, WalletCards, Workflow, X,
+  PackageCheck, Palette, Search, Settings, ShieldAlert, Sun, Trash2, UserRound, WalletCards, Workflow, X,
 } from 'lucide-react';
 import { APP_NAME } from '../../app-meta';
 import type { DummyAccount } from '../../lib/dummy-accounts';
 import type { NotificationPreferences } from '../../lib/preferences';
+import type { SettingsCategory } from '../../views/SettingsView';
 import { Modal } from '../ui/Modal';
 
 export type AppView =
@@ -20,7 +21,8 @@ interface AppShellProps {
   user: DummyAccount;
   resolvedTheme: 'light' | 'dark';
   notificationPreferences: NotificationPreferences;
-  onNavigate: (view: AppView) => void;
+  onNavigate: (view: AppView, settingsCategory?: SettingsCategory) => void;
+  onSettingsBack: () => void;
   onToggleTheme: () => void;
   onNotificationPreferencesChange: (next: Partial<NotificationPreferences>) => void;
   onLogout: () => void;
@@ -42,6 +44,9 @@ export const APP_VIEW_IDS: readonly AppView[] = [...APP_NAVIGATION.map((item) =>
 const WORKSPACE_SEARCH_ITEMS = [
   ...APP_NAVIGATION.map((item) => ({ key: `view-${item.id}`, view: item.id, label: item.label, hint: item.hint, icon: item.icon, type: 'View' as const })),
   { key: 'view-settings', view: 'settings' as const, label: 'Settings', hint: 'Profile, alerts, theme and colour', icon: Settings, type: 'View' as const },
+  { key: 'setting-profile', view: 'settings' as const, settingsCategory: 'profile' as const, label: 'Profile', hint: 'Account and workspace settings', icon: UserRound, type: 'Setting' as const },
+  { key: 'setting-notifications', view: 'settings' as const, settingsCategory: 'notifications' as const, label: 'Notifications', hint: 'Deal alerts and delivery settings', icon: Bell, type: 'Setting' as const },
+  { key: 'setting-appearance', view: 'settings' as const, settingsCategory: 'appearance' as const, label: 'Appearance', hint: 'Theme and accent settings', icon: Palette, type: 'Setting' as const },
   { key: 'action-new-quotation', view: 'quotations' as const, label: 'New quotation', hint: 'Start a customer deal', icon: ClipboardList, type: 'Action' as const },
   { key: 'action-review-approvals', view: 'approvals' as const, label: 'Review approvals', hint: 'Open pending deal decisions', icon: ClipboardCheck, type: 'Action' as const },
   { key: 'action-check-risk', view: 'health' as const, label: 'Check deal risk', hint: 'Review health and anomalies', icon: HeartPulse, type: 'Action' as const },
@@ -97,7 +102,7 @@ function loadNotifications() {
   }
 }
 
-export function AppShell({ activeView, children, user, resolvedTheme, notificationPreferences, onNavigate, onToggleTheme, onNotificationPreferencesChange, onLogout }: AppShellProps) {
+export function AppShell({ activeView, children, user, resolvedTheme, notificationPreferences, onNavigate, onSettingsBack, onToggleTheme, onNotificationPreferencesChange, onLogout }: AppShellProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -196,16 +201,24 @@ export function AppShell({ activeView, children, user, resolvedTheme, notificati
     localStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(notifications));
   }, [notifications]);
 
-  const navigate = (view: AppView) => {
-    onNavigate(view);
+  const navigate = (view: AppView, settingsCategory?: SettingsCategory) => {
+    onNavigate(view, settingsCategory);
     setMobileOpen(false);
     setNotificationsOpen(false);
+  };
+
+  const handleSettingsTrigger = () => {
+    if (activeView === 'settings') {
+      onSettingsBack();
+      return;
+    }
+    navigate('settings');
   };
 
   const openSearchResult = (item: WorkspaceSearchItem) => {
     searchInput.current?.blur();
     searchDialogInput.current?.blur();
-    navigate(item.view);
+    navigate(item.view, 'settingsCategory' in item ? item.settingsCategory : undefined);
     setSearchOpen(false);
     resetSearch();
   };
@@ -283,7 +296,7 @@ export function AppShell({ activeView, children, user, resolvedTheme, notificati
           })}
         </nav>
         <div className="sidebar-bottom">
-          <button type="button" className={`sidebar-item ${activeView === 'settings' ? 'active' : ''}`} aria-current={activeView === 'settings' ? 'page' : undefined} title="Settings" onClick={() => navigate('settings')}>
+          <button type="button" className={`sidebar-item ${activeView === 'settings' ? 'active' : ''}`} aria-current={activeView === 'settings' ? 'page' : undefined} title={activeView === 'settings' ? 'Back to workspace' : 'Settings'} onClick={handleSettingsTrigger}>
             <span className="sidebar-item-icon"><Settings size={20} /></span>
             <span className="sidebar-item-label">Settings</span>
             <ChevronRight className="sidebar-item-chevron" size={16} />
@@ -347,7 +360,7 @@ export function AppShell({ activeView, children, user, resolvedTheme, notificati
             <button type="button" className={`topbar-icon notification-trigger ${notificationsOpen ? 'selected' : ''}`} onClick={() => setNotificationsOpen((open) => !open)} aria-label={`${unreadCount} unread notifications`}>
               <Bell size={19} />{unreadCount > 0 && <span className="notification-badge">{unreadCount > 99 ? '99+' : unreadCount}</span>}
             </button>
-            <button type="button" className={`topbar-icon ${activeView === 'settings' ? 'selected' : ''}`} onClick={() => navigate('settings')} aria-label="Settings"><Settings size={19} /></button>
+            <button type="button" className={`topbar-icon ${activeView === 'settings' ? 'selected' : ''}`} onClick={handleSettingsTrigger} aria-label={activeView === 'settings' ? 'Back to workspace' : 'Settings'}><Settings size={19} /></button>
           </div>
         </header>
         <main className={`workspace-content ${activeView === 'settings' ? 'settings-workspace-content' : ''}`} key={activeView}>{children}</main>

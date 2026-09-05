@@ -1,17 +1,18 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ArrowLeft, Bell, Check, ChevronRight, Monitor, Moon, Palette, Sun, UserRound } from 'lucide-react';
 import type { DummyAccount } from '../lib/dummy-accounts';
 import type { NotificationPreferences } from '../lib/preferences';
 
 export type ThemeMode = 'light' | 'dark' | 'system';
 export type Accent = 'blue' | 'green' | 'amber' | 'violet';
-type SettingsCategory = 'profile' | 'appearance' | 'notifications';
+export type SettingsCategory = 'profile' | 'appearance' | 'notifications';
 
 interface SettingsViewProps {
   user: DummyAccount;
   theme: ThemeMode;
   accent: Accent;
   notificationPreferences: NotificationPreferences;
+  initialCategory?: SettingsCategory | null;
   onBack: () => void;
   onThemeChange: (theme: ThemeMode) => void;
   onAccentChange: (accent: Accent) => void;
@@ -43,13 +44,22 @@ export function SettingsView({
   theme,
   accent,
   notificationPreferences,
+  initialCategory,
   onBack,
   onThemeChange,
   onAccentChange,
   onNotificationPreferencesChange,
 }: SettingsViewProps) {
-  const [category, setCategory] = useState<SettingsCategory>('profile');
-  const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
+  const isPhone = window.matchMedia('(max-width: 768px)').matches;
+  const [category, setCategory] = useState<SettingsCategory>(initialCategory ?? 'profile');
+  const [mobileDetailOpen, setMobileDetailOpen] = useState(() => (
+    isPhone && initialCategory != null
+  ));
+
+  useEffect(() => {
+    setCategory(initialCategory ?? 'profile');
+    setMobileDetailOpen(isPhone && initialCategory != null);
+  }, [initialCategory, isPhone]);
 
   const openCategory = (next: SettingsCategory) => {
     setCategory(next);
@@ -59,7 +69,7 @@ export function SettingsView({
   return (
     <div className="settings-page">
       <div className="settings-mobile-breadcrumb" aria-label="Settings navigation">
-        <button type="button" className="settings-mobile-back" onClick={mobileDetailOpen ? () => setMobileDetailOpen(false) : onBack}>
+        <button type="button" className="settings-mobile-back" aria-label={mobileDetailOpen ? 'Back to settings categories' : 'Back to workspace'} onClick={mobileDetailOpen ? () => setMobileDetailOpen(false) : onBack}>
           <ArrowLeft size={16} /><span>Back</span>
         </button>
         <span>Settings</span>
@@ -77,7 +87,7 @@ export function SettingsView({
                 <p>{group.label}</p>
                 <div>
                   {group.items.map(({ id, label, detail, icon: Icon }) => (
-                    <button key={id} type="button" className={category === id ? 'active' : ''} onClick={() => openCategory(id)}>
+                    <button key={id} type="button" className={category === id && (mobileDetailOpen || !isPhone) ? 'active' : ''} onClick={() => openCategory(id)}>
                       <span><Icon size={18} /></span>
                       <span><strong>{label}</strong><small>{detail}</small></span>
                       <ChevronRight size={15} />
