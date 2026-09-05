@@ -11,7 +11,7 @@ const accounts = [
   ['DEMO_MANAGER_PASSWORD', 'manager@dealflow360.demo', 'Sales Manager Demo', 'sales_manager'],
   ['DEMO_FINANCE_PASSWORD', 'finance@dealflow360.demo', 'Finance/Ops Demo', 'finance_ops'],
 ];
-for (const [key] of accounts) if (!process.env[key] || process.env[key].length < 12) throw new Error(`${key} must be at least 12 characters.`);
+for (const [key] of accounts) if (!process.env[key] || process.env[key].length < 7) throw new Error(`${key} must be at least 7 characters.`);
 
 const pool = new Pool({ connectionString: databaseUrl });
 const client = await pool.connect();

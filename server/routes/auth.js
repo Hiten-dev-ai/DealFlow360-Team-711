@@ -8,7 +8,7 @@ import { csrfTokenForSession } from '../auth/csrf.js';
 
 const loginSchema = z.object({
   email: z.string().trim().email().max(254),
-  password: z.string().min(12).max(256),
+  password: z.string().min(7).max(256),
 });
 
 function publicUser(user, activeRole) {

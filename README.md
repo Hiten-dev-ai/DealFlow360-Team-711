@@ -38,7 +38,7 @@ The API uses PostgreSQL when `DATABASE_URL` is set. Apply migrations before star
 npm run db:migrate
 ```
 
-Provision the demo workspace by supplying four passwords of at least 12 characters outside Git:
+Provision the demo workspace by supplying four passwords of at least 7 characters outside Git. Use 12 or more characters outside controlled demos:
 
 ```bash
 DEMO_ADMIN_PASSWORD=... \
