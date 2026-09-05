@@ -58,10 +58,10 @@ button:focus-visible, input:focus-visible { outline: 3px solid color-mix(in srgb
 .field-shell input:-webkit-autofill:focus {
   -webkit-text-fill-color: var(--text);
   caret-color: var(--text);
-  background-color: transparent !important;
+  background-color: var(--surface-soft) !important;
   box-shadow: 0 0 0 1000px var(--surface-soft) inset !important;
   -webkit-box-shadow: 0 0 0 1000px var(--surface-soft) inset !important;
-  -webkit-background-clip: text;
+  -webkit-background-clip: border-box;
   transition: background-color 9999s ease-out 0s;
 }
 .drawer-locked { overflow: hidden; }
@@ -142,7 +142,7 @@ button:focus-visible, input:focus-visible { outline: 3px solid color-mix(in srgb
   background: var(--surface-soft);
   transition: border-color .18s ease, box-shadow .18s ease, background .18s ease;
 }
-.field-shell:focus-within { border-color: color-mix(in srgb, var(--accent) 65%, transparent); box-shadow: 0 0 0 4px var(--accent-soft); background: var(--surface); }
+.field-shell:focus-within { border-color: color-mix(in srgb, var(--accent) 65%, transparent); box-shadow: 0 0 0 4px var(--accent-soft); background: var(--surface-soft); }
 .field-shell input { width: 100%; height: 48px; padding: 0; border: 0; outline: 0; color: var(--text); background: transparent; }
 .field-shell input::placeholder { color: color-mix(in srgb, var(--text-muted) 72%, transparent); }
 .password-toggle { display: grid; place-items: center; width: 36px; height: 36px; margin-right: -7px; border: 0; border-radius: 9px; color: var(--text-muted); background: transparent; cursor: pointer; }
@@ -979,9 +979,9 @@ button.record-row { cursor: pointer; }
   }
   .settings-mobile-header {
     display: grid;
-    height: 78px;
-    grid-template-rows: 36px 42px;
-    padding: 0 8px;
+    height: 94px;
+    grid-template-rows: 44px 42px;
+    padding: 8px 8px 0;
   }
   .settings-mobile-breadcrumb {
     display: flex;
@@ -994,8 +994,26 @@ button.record-row { cursor: pointer; }
     font-weight: 740;
   }
   .settings-mobile-breadcrumb > span:last-child { overflow: hidden; color: var(--text); text-overflow: ellipsis; white-space: nowrap; }
-  .settings-mobile-header > .settings-mobile-back { width: fit-content; min-height: 36px; padding: 0 8px 0 2px; justify-content: flex-start; }
-  .settings-layout { display: block; height: calc(100% - 78px); overflow: hidden; }
+  .settings-mobile-header > .settings-mobile-back {
+    width: fit-content;
+    min-height: 42px;
+    gap: 8px;
+    padding: 0 15px 0 12px;
+    justify-content: flex-start;
+    border: 1px solid var(--border-strong);
+    border-radius: 11px;
+    color: var(--text);
+    background: var(--surface);
+    font-size: .78rem;
+    font-weight: 780;
+    box-shadow: 0 2px 8px rgba(2, 6, 23, .06);
+  }
+  .settings-mobile-header > .settings-mobile-back:hover {
+    border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+    color: var(--accent);
+    background: var(--accent-soft);
+  }
+  .settings-layout { display: block; height: calc(100% - 94px); overflow: hidden; }
   .settings-mobile-panel-hidden { display: none !important; }
   .settings-navigation {
     display: flex;
