@@ -6,6 +6,20 @@ The current foundation includes the authenticated application shell, responsive 
 
 The local UI uses two named dummy identities for smoke testing. Login shortcuts and credentials are intentionally not displayed on the sign-in screen.
 
+## Workspace modules
+
+- Dashboard with core sales and deal-flow metrics
+- Quotations with filtering, detail review, and draft creation
+- Discount approvals with risk context and decisions
+- Fulfillment with warehouse split review
+- Subscriptions with pause and resume controls
+- Invoices with payment recording
+- Deal Health with actionable anomaly signals
+- Reports with filters and CSV export
+- Personal appearance and notification settings
+
+The shell supports responsive desktop and phone navigation, command search, notifications, and persistent light/dark appearance preferences. Current workspace records are seeded interactive demo data while server-backed business modules are implemented incrementally.
+
 ## Development
 
 ```bash
