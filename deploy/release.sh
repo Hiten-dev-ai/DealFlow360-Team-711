@@ -28,10 +28,12 @@ npm run db:migrate
 if [[ "${SEED_DEMO:-false}" == "true" ]]; then npm run db:seed; fi
 
 ln -sfn "$release_dir" "$app_root/current"
-if ! systemctl restart "$service" || ! curl --fail --silent --show-error --retry 8 --retry-delay 2 http://127.0.0.1:4174/api/health >/dev/null; then
+if ! systemctl restart "$service" || ! curl --fail --silent --show-error --retry 8 --retry-delay 2 --retry-connrefused http://127.0.0.1:4174/api/health >/dev/null; then
   ln -sfn "$previous_release" "$app_root/current"
+  systemctl stop "$service" || true
+  docker exec "$database_container" psql -v ON_ERROR_STOP=1 -U "$database_user" -d "$database_name" -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public AUTHORIZATION $database_user;"
+  docker exec -i "$database_container" pg_restore --exit-on-error -U "$database_user" -d "$database_name" < "$backup_dir/$release_id.dump"
   systemctl restart "$service" || true
-  docker exec -i "$database_container" pg_restore -U "$database_user" -d "$database_name" --clean --if-exists < "$backup_dir/$release_id.dump"
   exit 1
 fi
 
