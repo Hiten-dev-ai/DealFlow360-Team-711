@@ -1,6 +1,6 @@
 import { FormEvent, useState } from 'react';
-import { ArrowRight, Eye, EyeOff, LockKeyhole, Mail, ShieldCheck, Workflow } from 'lucide-react';
-import { APP_DESCRIPTION, APP_NAME, TEAM_NAME } from '../app-meta';
+import { ArrowRight, Eye, EyeOff, LockKeyhole, Mail, Workflow } from 'lucide-react';
+import { APP_DESCRIPTION, APP_NAME } from '../app-meta';
 import { authenticateDummyAccount, type DummyAccount } from '../lib/dummy-accounts';
 
 interface LoginPageProps {
@@ -32,21 +32,18 @@ export function LoginPage({ onAuthenticated }: LoginPageProps) {
       <section className="login-story" aria-label="Product overview">
         <div className="brand-lockup">
           <span className="brand-mark"><Workflow size={22} /></span>
-          <span><strong>{APP_NAME}</strong><small>{TEAM_NAME}</small></span>
+          <span><strong>{APP_NAME}</strong></span>
         </div>
         <div className="login-story-copy">
-          <span className="story-kicker"><ShieldCheck size={15} /> CONTROLLED DEAL EXECUTION</span>
           <h1>Every deal.<br />One clear flow.</h1>
           <p>{APP_DESCRIPTION}</p>
         </div>
-        <div className="story-signal"><span className="signal-dot" /> Workspace services ready</div>
       </section>
 
       <section className="login-surface" aria-labelledby="login-title">
         <div className="login-card">
           <div className="login-heading">
             <span className="mobile-brand-mark"><Workflow size={20} /></span>
-            <p>{TEAM_NAME}</p>
             <h2 id="login-title">Welcome back</h2>
             <span>Sign in to your sales workspace.</span>
           </div>
@@ -95,7 +92,6 @@ export function LoginPage({ onAuthenticated }: LoginPageProps) {
               <ArrowRight size={18} />
             </button>
           </form>
-          <p className="login-footnote">Protected workspace · {TEAM_NAME}</p>
         </div>
       </section>
     </main>

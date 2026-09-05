@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
+import { flushSync } from 'react-dom';
 import {
   Activity, Bell, BellOff, CheckCheck, CheckCircle2, ChevronRight, ClipboardCheck, ClipboardList,
   FileBarChart, FileText, HeartPulse, LayoutDashboard, LogOut, Menu, Moon,
@@ -38,6 +39,31 @@ export const APP_NAVIGATION = [
 
 export const APP_VIEW_IDS: readonly AppView[] = [...APP_NAVIGATION.map((item) => item.id), 'settings'];
 
+const WORKSPACE_SEARCH_ITEMS = [
+  ...APP_NAVIGATION.map((item) => ({ key: `view-${item.id}`, view: item.id, label: item.label, hint: item.hint, icon: item.icon, type: 'View' as const })),
+  { key: 'view-settings', view: 'settings' as const, label: 'Settings', hint: 'Profile, alerts, theme and colour', icon: Settings, type: 'View' as const },
+  { key: 'action-new-quotation', view: 'quotations' as const, label: 'New quotation', hint: 'Start a customer deal', icon: ClipboardList, type: 'Action' as const },
+  { key: 'action-review-approvals', view: 'approvals' as const, label: 'Review approvals', hint: 'Open pending deal decisions', icon: ClipboardCheck, type: 'Action' as const },
+  { key: 'action-check-risk', view: 'health' as const, label: 'Check deal risk', hint: 'Review health and anomalies', icon: HeartPulse, type: 'Action' as const },
+];
+
+type WorkspaceSearchItem = (typeof WORKSPACE_SEARCH_ITEMS)[number];
+
+function searchWorkspace(query: string): WorkspaceSearchItem[] {
+  const normalized = query.trim().toLowerCase();
+  if (!normalized) return WORKSPACE_SEARCH_ITEMS;
+  return WORKSPACE_SEARCH_ITEMS
+    .map((item) => {
+      const label = item.label.toLowerCase();
+      const hint = item.hint.toLowerCase();
+      const score = label === normalized ? 0 : label.startsWith(normalized) ? 1 : label.includes(normalized) ? 2 : hint.includes(normalized) ? 3 : -1;
+      return { item, score };
+    })
+    .filter(({ score }) => score >= 0)
+    .sort((a, b) => a.score - b.score || a.item.label.localeCompare(b.item.label))
+    .map(({ item }) => item);
+}
+
 const titles: Record<AppView, string> = {
   dashboard: 'Dashboard', quotations: 'Quotations', approvals: 'Approvals',
   fulfillment: 'Fulfillment', subscriptions: 'Subscriptions', invoices: 'Invoices',
@@ -75,6 +101,10 @@ export function AppShell({ activeView, children, user, resolvedTheme, notificati
   const [mobileOpen, setMobileOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchFocused, setSearchFocused] = useState(false);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchSuggestions, setSearchSuggestions] = useState<WorkspaceSearchItem[]>([]);
+  const [searchActiveIndex, setSearchActiveIndex] = useState(-1);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [notifications, setNotifications] = useState<WorkspaceNotification[]>(loadNotifications);
   const initials = useMemo(
@@ -83,14 +113,30 @@ export function AppShell({ activeView, children, user, resolvedTheme, notificati
   );
   const unreadCount = notifications.filter((item) => !item.read).length;
   const filteredNotifications = notificationPreferences.priorityOnly ? notifications.filter((item) => item.priority) : notifications;
-  const normalizedQuery = searchQuery.trim().toLowerCase();
-  const searchResults = APP_NAVIGATION.filter((item) => `${item.label} ${item.hint}`.toLowerCase().includes(normalizedQuery));
+  const searchInput = useRef<HTMLInputElement>(null);
+  const searchDialogInput = useRef<HTMLInputElement>(null);
+  const fullSearchResults = useMemo(() => searchWorkspace(searchQuery), [searchQuery]);
+  const searchHasMore = fullSearchResults.length > 4;
+
+  const openFullSearch = () => {
+    const showDialog = () => {
+      setSearchOpen(true);
+      setSearchFocused(false);
+      setSearchActiveIndex(-1);
+    };
+    const transitionDocument = document as Document & { startViewTransition?: (update: () => void) => unknown };
+    if (transitionDocument.startViewTransition && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      transitionDocument.startViewTransition(() => flushSync(showDialog));
+    } else {
+      showDialog();
+    }
+  };
 
   useEffect(() => {
     const onKeyboard = (event: KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
         event.preventDefault();
-        setSearchOpen(true);
+        openFullSearch();
       }
       if (event.key === 'Escape') {
         setMobileOpen(false);
@@ -100,6 +146,26 @@ export function AppShell({ activeView, children, user, resolvedTheme, notificati
     document.addEventListener('keydown', onKeyboard);
     return () => document.removeEventListener('keydown', onKeyboard);
   }, []);
+
+  useEffect(() => {
+    if (!searchFocused || searchOpen || !searchQuery.trim()) {
+      setSearchSuggestions([]);
+      setSearchLoading(false);
+      return;
+    }
+    setSearchLoading(true);
+    const timer = window.setTimeout(() => {
+      setSearchSuggestions(searchWorkspace(searchQuery).slice(0, 4));
+      setSearchActiveIndex(-1);
+      setSearchLoading(false);
+    }, 150);
+    return () => window.clearTimeout(timer);
+  }, [searchFocused, searchOpen, searchQuery]);
+
+  useEffect(() => {
+    if (!searchOpen) return;
+    window.requestAnimationFrame(() => searchDialogInput.current?.focus());
+  }, [searchOpen]);
 
   useEffect(() => {
     if (!mobileOpen && !notificationsOpen) return;
@@ -117,10 +183,53 @@ export function AppShell({ activeView, children, user, resolvedTheme, notificati
     setNotificationsOpen(false);
   };
 
-  const openSearchResult = (view: AppView) => {
-    navigate(view);
+  const openSearchResult = (item: WorkspaceSearchItem) => {
+    navigate(item.view);
     setSearchOpen(false);
     setSearchQuery('');
+    setSearchSuggestions([]);
+    setSearchActiveIndex(-1);
+  };
+
+  const handleInlineSearchKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      if (!searchSuggestions.length) return;
+      setSearchActiveIndex((current) => {
+        const next = event.key === 'ArrowDown' ? current + 1 : current - 1;
+        return next < 0 ? searchSuggestions.length - 1 : next >= searchSuggestions.length ? 0 : next;
+      });
+      return;
+    }
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      const selected = searchSuggestions[searchActiveIndex];
+      if (selected) openSearchResult(selected);
+      else if (searchQuery.trim()) openFullSearch();
+      return;
+    }
+    if (event.key === 'Escape') {
+      setSearchFocused(false);
+      setSearchSuggestions([]);
+      searchInput.current?.blur();
+    }
+  };
+
+  const handleDialogSearchKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      if (!fullSearchResults.length) return;
+      setSearchActiveIndex((current) => {
+        const next = event.key === 'ArrowDown' ? current + 1 : current - 1;
+        return next < 0 ? fullSearchResults.length - 1 : next >= fullSearchResults.length ? 0 : next;
+      });
+      return;
+    }
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      const selected = fullSearchResults[searchActiveIndex] ?? (fullSearchResults.length === 1 ? fullSearchResults[0] : undefined);
+      if (selected) openSearchResult(selected);
+    }
   };
 
   const markRead = (id: string) => {
@@ -171,10 +280,39 @@ export function AppShell({ activeView, children, user, resolvedTheme, notificati
             <button type="button" className="mobile-menu" onClick={() => setMobileOpen(true)} aria-label="Open navigation"><Menu size={21} /></button>
             <div><span>{TEAM_NAME}</span><h1>{titles[activeView]}</h1></div>
           </div>
-          <button type="button" className="topbar-search" aria-label="Search workspace" onClick={() => setSearchOpen(true)}>
-            <Search size={17} /><span>Search modules and actions...</span>
-            <span className="shortcut"><kbd>Ctrl</kbd><b>+</b><kbd>K</kbd></span>
-          </button>
+          <div className="topbar-search-wrap" onBlur={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setSearchFocused(false);
+          }}>
+            <div className={`topbar-search ${!searchOpen ? 'search-transition-source' : ''}`} role="search">
+              <Search size={17} />
+              <input
+                ref={searchInput}
+                type="text"
+                role="combobox"
+                aria-label="Search workspace"
+                aria-autocomplete="list"
+                aria-expanded={searchFocused && searchSuggestions.length > 0}
+                aria-controls="workspace-search-suggestions"
+                aria-activedescendant={searchActiveIndex >= 0 ? `workspace-search-result-${searchActiveIndex}` : undefined}
+                value={searchQuery}
+                onFocus={() => setSearchFocused(true)}
+                onChange={(event) => { setSearchQuery(event.target.value); setSearchFocused(true); setSearchActiveIndex(-1); }}
+                onKeyDown={handleInlineSearchKeyDown}
+                placeholder="Search modules and actions..."
+              />
+              <span className="shortcut"><kbd>Ctrl</kbd><b>+</b><kbd>K</kbd></span>
+            </div>
+            {searchFocused && searchQuery.trim() && !searchOpen && (searchLoading || searchSuggestions.length > 0) && (
+              <div className="search-suggestions" id="workspace-search-suggestions" role="listbox">
+                {searchLoading && <div className="search-suggestion-status">Searching workspace...</div>}
+                {!searchLoading && searchSuggestions.map((item, index) => {
+                  const Icon = item.icon;
+                  return <button key={item.key} id={`workspace-search-result-${index}`} type="button" role="option" aria-selected={searchActiveIndex === index} className={`search-suggestion ${searchActiveIndex === index ? 'active' : ''}`} onMouseDown={(event) => event.preventDefault()} onClick={() => openSearchResult(item)}><span><Icon size={17} /></span><span><strong>{item.label}</strong><small>{item.hint}</small></span><em>{item.type}</em></button>;
+                })}
+                {!searchLoading && searchHasMore && <button type="button" className="search-more" onMouseDown={(event) => event.preventDefault()} onClick={openFullSearch}>Press Enter for more results <span>↵</span></button>}
+              </div>
+            )}
+          </div>
           <div className="topbar-actions">
             <button type="button" className="topbar-icon theme-toggle" onClick={onToggleTheme} aria-label={`Switch to ${resolvedTheme === 'dark' ? 'light' : 'dark'} theme`}>
               {resolvedTheme === 'dark' ? <Sun size={19} /> : <Moon size={19} />}
@@ -211,13 +349,13 @@ export function AppShell({ activeView, children, user, resolvedTheme, notificati
         </div>
       </aside>
 
-      <Modal open={searchOpen} title="Search workspace" eyebrow="Quick navigation" onClose={() => setSearchOpen(false)}>
-        <div className="command-search"><Search size={18} /><input autoFocus value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Find a module..." aria-label="Search modules" /></div>
+      <Modal open={searchOpen} title="Search workspace" eyebrow="Quick navigation" onClose={() => { setSearchOpen(false); setSearchActiveIndex(-1); }}>
+        <div className="command-search search-transition-target"><Search size={18} /><input ref={searchDialogInput} value={searchQuery} onChange={(event) => { setSearchQuery(event.target.value); setSearchActiveIndex(-1); }} onKeyDown={handleDialogSearchKeyDown} placeholder="Find a module..." aria-label="Search modules" /></div>
         <div className="command-results">
-          {searchResults.length === 0 && <p className="compact-empty"><Activity size={18} /> No matching module.</p>}
-          {searchResults.map((item) => {
+          {fullSearchResults.length === 0 && <p className="compact-empty"><Activity size={18} /> No matching module.</p>}
+          {fullSearchResults.map((item, index) => {
             const Icon = item.icon;
-            return <button key={item.id} type="button" onClick={() => openSearchResult(item.id)}><span><Icon size={18} /></span><span><strong>{item.label}</strong><small>{item.hint}</small></span><ChevronRight size={16} /></button>;
+            return <button key={item.key} type="button" className={searchActiveIndex === index ? 'active' : ''} onClick={() => openSearchResult(item)}><span><Icon size={18} /></span><span><strong>{item.label}</strong><small>{item.hint}</small></span><ChevronRight size={16} /></button>;
           })}
         </div>
       </Modal>
