@@ -184,6 +184,8 @@ export function AppShell({ activeView, children, user, resolvedTheme, notificati
   };
 
   const openSearchResult = (item: WorkspaceSearchItem) => {
+    searchInput.current?.blur();
+    searchDialogInput.current?.blur();
     navigate(item.view);
     setSearchOpen(false);
     setSearchQuery('');
@@ -205,7 +207,11 @@ export function AppShell({ activeView, children, user, resolvedTheme, notificati
       event.preventDefault();
       const selected = searchSuggestions[searchActiveIndex];
       if (selected) openSearchResult(selected);
-      else if (searchQuery.trim()) openFullSearch();
+      else if (searchQuery.trim()) {
+        const firstResult = searchSuggestions[0] ?? fullSearchResults[0];
+        if (window.matchMedia('(max-width: 768px)').matches && firstResult) openSearchResult(firstResult);
+        else openFullSearch();
+      }
       return;
     }
     if (event.key === 'Escape') {
@@ -349,7 +355,7 @@ export function AppShell({ activeView, children, user, resolvedTheme, notificati
         </div>
       </aside>
 
-      <Modal open={searchOpen} title="Search workspace" eyebrow="Quick navigation" onClose={() => { setSearchOpen(false); setSearchActiveIndex(-1); }}>
+      <Modal open={searchOpen} title="Search workspace" eyebrow="Quick navigation" className="search-modal" onClose={() => { setSearchOpen(false); setSearchActiveIndex(-1); }}>
         <div className="command-search search-transition-target"><Search size={18} /><input ref={searchDialogInput} value={searchQuery} onChange={(event) => { setSearchQuery(event.target.value); setSearchActiveIndex(-1); }} onKeyDown={handleDialogSearchKeyDown} placeholder="Find a module..." aria-label="Search modules" /></div>
         <div className="command-results">
           {fullSearchResults.length === 0 && <p className="compact-empty"><Activity size={18} /> No matching module.</p>}

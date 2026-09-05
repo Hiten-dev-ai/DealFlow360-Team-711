@@ -8,9 +8,10 @@ interface ModalProps {
   children: ReactNode;
   onClose: () => void;
   size?: 'standard' | 'wide';
+  className?: string;
 }
 
-export function Modal({ open, title, eyebrow, children, onClose, size = 'standard' }: ModalProps) {
+export function Modal({ open, title, eyebrow, children, onClose, size = 'standard', className = '' }: ModalProps) {
   const closeButton = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
@@ -33,7 +34,7 @@ export function Modal({ open, title, eyebrow, children, onClose, size = 'standar
 
   return (
     <div className="modal-layer" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-      <section className={`modal-card ${size === 'wide' ? 'wide' : ''}`} role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <section className={`modal-card ${size === 'wide' ? 'wide' : ''} ${className}`.trim()} role="dialog" aria-modal="true" aria-labelledby="modal-title">
         <header className="modal-header">
           <div>{eyebrow && <span>{eyebrow}</span>}<h2 id="modal-title">{title}</h2></div>
           <button ref={closeButton} type="button" className="icon-control" onClick={onClose} aria-label="Close dialog"><X size={19} /></button>
