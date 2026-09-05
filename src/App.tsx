@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { AppShell, type AppView } from './components/layout/AppShell';
 import { findDummyAccount, type DummyAccount } from './lib/dummy-accounts';
+import { DEFAULT_NOTIFICATION_PREFERENCES, type NotificationPreferences } from './lib/preferences';
 import { LoginPage } from './views/LoginPage';
 import { OverviewView } from './views/OverviewView';
 import { SettingsView, type Accent, type ThemeMode } from './views/SettingsView';
@@ -15,12 +16,21 @@ import {
 } from './views/WorkspaceViews';
 
 const USER_SESSION_KEY = 'dealflow360.demo.user';
+const NOTIFICATION_PREFERENCES_KEY = 'dealflow360.notification-preferences';
 
 function App() {
   const [user, setUser] = useState<DummyAccount | null>(() => findDummyAccount(sessionStorage.getItem(USER_SESSION_KEY)));
   const [activeView, setActiveView] = useState<AppView>('dashboard');
+  const [lastWorkspaceView, setLastWorkspaceView] = useState<AppView>('dashboard');
   const [theme, setTheme] = useState<ThemeMode>(() => (localStorage.getItem('dealflow360.theme') as ThemeMode | null) ?? 'dark');
   const [accent, setAccent] = useState<Accent>(() => (localStorage.getItem('dealflow360.accent') as Accent | null) ?? 'blue');
+  const [notificationPreferences, setNotificationPreferences] = useState<NotificationPreferences>(() => {
+    try {
+      return { ...DEFAULT_NOTIFICATION_PREFERENCES, ...JSON.parse(localStorage.getItem(NOTIFICATION_PREFERENCES_KEY) ?? '{}') };
+    } catch {
+      return DEFAULT_NOTIFICATION_PREFERENCES;
+    }
+  });
 
   const resolvedTheme: 'light' | 'dark' = theme === 'system'
     ? (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark')
@@ -33,6 +43,10 @@ function App() {
     localStorage.setItem('dealflow360.accent', accent);
   }, [theme, resolvedTheme, accent]);
 
+  useEffect(() => {
+    localStorage.setItem(NOTIFICATION_PREFERENCES_KEY, JSON.stringify(notificationPreferences));
+  }, [notificationPreferences]);
+
   const authenticate = (account: DummyAccount) => {
     sessionStorage.setItem(USER_SESSION_KEY, account.id);
     setUser(account);
@@ -44,10 +58,19 @@ function App() {
     setUser(null);
   };
 
+  const navigate = (view: AppView) => {
+    if (view === 'settings' && activeView !== 'settings') setLastWorkspaceView(activeView);
+    setActiveView(view);
+  };
+
+  const updateNotificationPreferences = (next: Partial<NotificationPreferences>) => {
+    setNotificationPreferences((current) => ({ ...current, ...next }));
+  };
+
   if (!user) return <LoginPage onAuthenticated={authenticate} />;
 
   const views: Record<AppView, ReactNode> = {
-    dashboard: <OverviewView onNavigate={setActiveView} />,
+    dashboard: <OverviewView onNavigate={navigate} />,
     quotations: <QuotationsView />,
     approvals: <ApprovalsView />,
     fulfillment: <FulfillmentView />,
@@ -55,7 +78,7 @@ function App() {
     invoices: <InvoicesView />,
     health: <DealHealthView />,
     reports: <ReportsView />,
-    settings: <SettingsView user={user} theme={theme} accent={accent} onThemeChange={setTheme} onAccentChange={setAccent} />,
+    settings: <SettingsView user={user} theme={theme} accent={accent} notificationPreferences={notificationPreferences} onBack={() => navigate(lastWorkspaceView)} onThemeChange={setTheme} onAccentChange={setAccent} onNotificationPreferencesChange={updateNotificationPreferences} />,
   };
 
   return (
@@ -63,8 +86,10 @@ function App() {
       activeView={activeView}
       user={user}
       resolvedTheme={resolvedTheme}
-      onNavigate={setActiveView}
+      notificationPreferences={notificationPreferences}
+      onNavigate={navigate}
       onToggleTheme={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
+      onNotificationPreferencesChange={updateNotificationPreferences}
       onLogout={logout}
     >
       {views[activeView]}
