@@ -327,11 +327,11 @@ export function registerDomainRoutes(app, { store, config, auth }) {
         [current.user.workspaceId],
       ),
       store.query(
-        `SELECT s.id,s.status,s.cadence,s.quantity,s.unit_price_minor AS "unitPriceMinor",s.next_bill_on AS "nextBillOn",s.version,c.name AS customer,p.name AS plan FROM subscriptions s JOIN customers c ON c.id=s.customer_id JOIN products p ON p.id=s.product_id WHERE s.workspace_id=$1 ORDER BY s.created_at DESC`,
+        `SELECT s.id,s.quote_id AS "quoteId",s.status,s.cadence,s.quantity,s.unit_price_minor AS "unitPriceMinor",s.next_bill_on AS "nextBillOn",s.version,c.name AS customer,p.name AS plan FROM subscriptions s JOIN customers c ON c.id=s.customer_id JOIN products p ON p.id=s.product_id WHERE s.workspace_id=$1 ORDER BY s.created_at DESC`,
         [current.user.workspaceId],
       ),
       store.query(
-        `SELECT i.id,i.invoice_number AS "invoiceNumber",i.status,i.total_minor AS "totalMinor",i.paid_minor AS "paidMinor",i.due_on AS "dueOn",i.version,c.name AS customer FROM invoices i JOIN customers c ON c.id=i.customer_id WHERE i.workspace_id=$1 ORDER BY i.created_at DESC`,
+        `SELECT i.id,i.quote_id AS "quoteId",i.subscription_id AS "subscriptionId",i.invoice_number AS "invoiceNumber",i.status,i.total_minor AS "totalMinor",i.paid_minor AS "paidMinor",i.due_on AS "dueOn",i.version,c.name AS customer FROM invoices i JOIN customers c ON c.id=i.customer_id WHERE i.workspace_id=$1 ORDER BY i.created_at DESC`,
         [current.user.workspaceId],
       ),
       store.query(
@@ -1589,12 +1589,11 @@ export function registerDomainRoutes(app, { store, config, auth }) {
     return c.json({ data: result.rows[0] }, 201);
   });
 
-  app.get("/api/reports/deals.:format", auth.required, async (c) => {
+  const renderReport = async (c, format) => {
     const unavailable = dbRequired(c, store);
     if (unavailable) return unavailable;
     const current = c.get("auth");
     const quotes = await listQuotes(store, current);
-    const format = c.req.param("format");
     if (format === "xls") {
       const columns = ["Quote", "Customer", "Owner", "Status", "Value (INR minor)", "Margin bps", "Risk"];
       const rows = quotes.map((quote) => [quote.quoteNumber, quote.customer, quote.owner, quote.status, quote.totalMinor, quote.marginBps, quote.riskScore]);
@@ -1627,5 +1626,8 @@ export function registerDomainRoutes(app, { store, config, auth }) {
       return c.body(Buffer.concat(chunks));
     }
     return c.json({ error: "Use pdf or xls.", code: "FORMAT_INVALID" }, 400);
-  });
+  };
+
+  app.get("/api/reports/deals.pdf", auth.required, (c) => renderReport(c, "pdf"));
+  app.get("/api/reports/deals.xls", auth.required, (c) => renderReport(c, "xls"));
 }

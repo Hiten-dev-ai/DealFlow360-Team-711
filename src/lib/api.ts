@@ -69,6 +69,20 @@ export async function logout() {
 
 export const getBootstrap = () => apiFetch<BootstrapResponse>('/api/bootstrap');
 
+export async function downloadReport(format: 'pdf' | 'xls') {
+  const response = await fetch(`/api/reports/deals.${format}`, {
+    credentials: 'same-origin',
+    cache: 'no-store',
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    throw new ApiError(body?.error ?? 'Report download failed.', response.status, body?.code ?? 'REPORT_FAILED');
+  }
+  const disposition = response.headers.get('content-disposition') ?? '';
+  const filename = disposition.match(/filename="?([^";]+)"?/i)?.[1] ?? `dealflow360-deals.${format}`;
+  return { blob: await response.blob(), filename };
+}
+
 export async function mutate<T>(path: string, method: 'POST' | 'PATCH' | 'DELETE', payload?: unknown, idempotencyKey?: string) {
   return apiFetch<T>(path, { method, body: payload === undefined ? undefined : JSON.stringify(payload), headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined });
 }

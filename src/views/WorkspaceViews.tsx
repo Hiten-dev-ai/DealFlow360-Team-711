@@ -22,7 +22,8 @@ import {
   X,
 } from "lucide-react";
 import { Modal } from "../components/ui/Modal";
-import { mutate } from "../lib/api";
+import { CustomSelect, type SelectOption } from "../components/ui/CustomSelect";
+import { downloadReport, mutate } from "../lib/api";
 import { statusTone } from "../lib/demo-data";
 import { useWorkspace } from "../lib/workspace";
 
@@ -39,6 +40,40 @@ const titleCase = (value: unknown) =>
   text(value)
     .replaceAll("_", " ")
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
+
+const QUOTE_STATUS_OPTIONS: SelectOption[] = [
+  { value: "all", label: "All statuses" },
+  { value: "draft", label: "Draft" },
+  { value: "pending_manager", label: "Pending manager" },
+  { value: "pending_finance", label: "Pending finance" },
+  { value: "approved", label: "Approved" },
+  { value: "negotiation", label: "Negotiation" },
+  { value: "accepted", label: "Accepted" },
+  { value: "rejected", label: "Rejected" },
+  { value: "expired", label: "Expired" },
+];
+
+const INVOICE_STATUS_OPTIONS: SelectOption[] = [
+  { value: "all", label: "All statuses" },
+  { value: "due", label: "Due" },
+  { value: "partially_paid", label: "Partially paid" },
+  { value: "paid", label: "Paid" },
+  { value: "overdue", label: "Overdue" },
+  { value: "draft", label: "Draft" },
+];
+
+const SUBSCRIPTION_STATUS_OPTIONS: SelectOption[] = [
+  { value: "all", label: "All statuses" },
+  { value: "active", label: "Active" },
+  { value: "paused", label: "Paused" },
+  { value: "cancelled", label: "Cancelled" },
+];
+
+const APPROVAL_STAGE_OPTIONS: SelectOption[] = [
+  { value: "all", label: "All stages" },
+  { value: "manager", label: "Manager" },
+  { value: "finance", label: "Finance / Ops" },
+];
 
 function PageHeader({
   kicker,
@@ -84,10 +119,11 @@ function ErrorText({ value }: { value: string }) {
 }
 
 export function QuotationsView() {
-  const { data, connection, run } = useWorkspace();
+  const { data, connection, role, run } = useWorkspace();
+  const canEdit = role !== "finance_ops";
   const quotations = data.quotes;
   const [query, setQuery] = useState("");
-  const [status, setStatus] = useState("All");
+  const [status, setStatus] = useState("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [error, setError] = useState("");
@@ -100,7 +136,7 @@ export function QuotationsView() {
           `${text(quote.quoteNumber)} ${text(quote.customer)} ${text(quote.owner)}`
             .toLowerCase()
             .includes(query.toLowerCase()) &&
-          (status === "All" || titleCase(quote.status) === status),
+          (status === "all" || text(quote.status) === status),
       ),
     [query, quotations, status],
   );
@@ -183,7 +219,7 @@ export function QuotationsView() {
         kicker="Sales workspace"
         title="Quotations"
         description="Build, govern, and track every customer offer."
-        action={
+        action={canEdit ? (
           <button
             type="button"
             className="primary-action"
@@ -192,7 +228,7 @@ export function QuotationsView() {
           >
             <FilePlus2 size={17} /> New quotation
           </button>
-        }
+        ) : undefined}
       />
       <section className="data-panel">
         <div className="data-toolbar">
@@ -204,21 +240,14 @@ export function QuotationsView() {
               placeholder="Search quotations"
             />
           </label>
-          <label className="toolbar-select">
-            <Filter size={15} />
-            <select
-              value={status}
-              onChange={(event) => setStatus(event.target.value)}
-            >
-              <option>All</option>
-              <option>Draft</option>
-              <option>Pending Manager</option>
-              <option>Pending Finance</option>
-              <option>Approved</option>
-              <option>Negotiation</option>
-              <option>Accepted</option>
-            </select>
-          </label>
+          <CustomSelect
+            className="toolbar-custom-select"
+            ariaLabel="Filter quotations by status"
+            icon={<Filter size={15} />}
+            options={QUOTE_STATUS_OPTIONS}
+            value={status}
+            onChange={setStatus}
+          />
           <span className="result-count">{filtered.length} records</span>
         </div>
         <div className="record-table quotation-table">
@@ -270,23 +299,27 @@ export function QuotationsView() {
         <form className="modal-form" onSubmit={createQuote}>
           <label>
             <span>Customer</span>
-            <select name="customerId" required>
-              {data.customers.map((customer) => (
-                <option key={text(customer.id)} value={text(customer.id)}>
-                  {text(customer.name)} · {text(customer.tier)}
-                </option>
-              ))}
-            </select>
+            <CustomSelect
+              name="customerId"
+              ariaLabel="Customer"
+              options={data.customers.map((customer) => ({
+                value: text(customer.id),
+                label: text(customer.name),
+                detail: text(customer.tier),
+              }))}
+            />
           </label>
           <label>
             <span>Product</span>
-            <select name="productId" required>
-              {data.catalog.map((product) => (
-                <option key={text(product.id)} value={text(product.id)}>
-                  {text(product.name)} · {formatMoney(product.priceMinor)}
-                </option>
-              ))}
-            </select>
+            <CustomSelect
+              name="productId"
+              ariaLabel="Product"
+              options={data.catalog.map((product) => ({
+                value: text(product.id),
+                label: text(product.name),
+                detail: `${text(product.sku)} · ${formatMoney(product.priceMinor)}`,
+              }))}
+            />
           </label>
           <div className="form-columns">
             <label>
@@ -306,6 +339,7 @@ export function QuotationsView() {
                 type="number"
                 min="0"
                 max="100"
+                step="0.1"
                 defaultValue="0"
                 required
               />
@@ -386,7 +420,7 @@ export function QuotationsView() {
                     ? `Route: ${(selected.approvalRoute as string[]).join(" → ")}`
                     : "Eligible for automatic approval."}</p>
               </div>
-              {((selected.suggestions as Row[]) ?? [])[0] && <button type="button" className="secondary-action" disabled={connection !== "online"} onClick={() => void addSuggestion(((selected.suggestions as Row[]) ?? [])[0])}>Add</button>}
+              {canEdit && ((selected.suggestions as Row[]) ?? [])[0] && <button type="button" className="secondary-action" disabled={connection !== "online"} onClick={() => void addSuggestion(((selected.suggestions as Row[]) ?? [])[0])}>Add</button>}
             </div>
             {portalLink && (
               <div className="form-note">
@@ -402,15 +436,15 @@ export function QuotationsView() {
             )}
             <ErrorText value={error} />
             <div className="modal-actions">
-              <button
+              {canEdit && <button
                 type="button"
                 className="secondary-action"
                 disabled={connection !== "online"}
                 onClick={createPortalLink}
               >
                 Customer link
-              </button>
-              {["draft", "negotiation"].includes(text(selected.status)) && (
+              </button>}
+              {canEdit && ["draft", "negotiation"].includes(text(selected.status)) && (
                 <button
                   type="button"
                   className="primary-action"
@@ -431,8 +465,16 @@ export function QuotationsView() {
 export function ApprovalsView() {
   const { data, connection, run } = useWorkspace();
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [stage, setStage] = useState("all");
   const [error, setError] = useState("");
   const selected = data.approvals.find((record) => record.id === selectedId);
+  const filtered = useMemo(
+    () => data.approvals.filter((record) =>
+      `${text(record.quoteNumber)} ${text(record.customer)}`.toLowerCase().includes(query.toLowerCase())
+      && (stage === "all" || text(record.stage) === stage)),
+    [data.approvals, query, stage],
+  );
   const decide = async (decision: "approve" | "reject") => {
     if (!selected) return;
     try {
@@ -451,11 +493,26 @@ export function ApprovalsView() {
         title="Approvals"
         description="Review exceptions with the risk and margin context visible."
       />
+      <div className="data-toolbar standalone-toolbar">
+        <label className="toolbar-search">
+          <Search size={16} />
+          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search approvals" />
+        </label>
+        <CustomSelect
+          className="toolbar-custom-select"
+          ariaLabel="Filter approvals by stage"
+          icon={<Filter size={15} />}
+          options={APPROVAL_STAGE_OPTIONS}
+          value={stage}
+          onChange={setStage}
+        />
+        <span className="result-count">{filtered.length} pending</span>
+      </div>
       <section className="card-grid three-column">
-        {data.approvals.length === 0 && (
+        {filtered.length === 0 && (
           <EmptyState title="No approvals waiting" />
         )}
-        {data.approvals.map((record) => (
+        {filtered.map((record) => (
           <article className="work-card" key={text(record.id)}>
             <header>
               <span className="record-icon">
@@ -658,7 +715,15 @@ export function FulfillmentView() {
 
 export function SubscriptionsView() {
   const { data, connection, run } = useWorkspace();
+  const [query, setQuery] = useState("");
+  const [status, setStatus] = useState("all");
   const [error, setError] = useState("");
+  const filtered = useMemo(
+    () => data.subscriptions.filter((item) =>
+      `${text(item.customer)} ${text(item.plan)}`.toLowerCase().includes(query.toLowerCase())
+      && (status === "all" || text(item.status) === status)),
+    [data.subscriptions, query, status],
+  );
   const toggle = async (item: Row) => {
     try {
       await run(() =>
@@ -680,6 +745,21 @@ export function SubscriptionsView() {
       />
       <ErrorText value={error} />
       <section className="data-panel">
+        <div className="data-toolbar">
+          <label className="toolbar-search">
+            <Search size={16} />
+            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search subscriptions" />
+          </label>
+          <CustomSelect
+            className="toolbar-custom-select"
+            ariaLabel="Filter subscriptions by status"
+            icon={<Filter size={15} />}
+            options={SUBSCRIPTION_STATUS_OPTIONS}
+            value={status}
+            onChange={setStatus}
+          />
+          <span className="result-count">{filtered.length} records</span>
+        </div>
         <div className="record-table subscription-table">
           <div className="record-table-head">
             <span>Subscription</span>
@@ -689,7 +769,7 @@ export function SubscriptionsView() {
             <span>Status</span>
             <span />
           </div>
-          {data.subscriptions.map((item) => (
+          {filtered.map((item) => (
             <div className="record-row" key={text(item.id)}>
               <span className="record-primary">
                 <strong>{text(item.customer)}</strong>
@@ -724,7 +804,7 @@ export function SubscriptionsView() {
               </button>
             </div>
           ))}
-          {!data.subscriptions.length && (
+          {!filtered.length && (
             <EmptyState title="No subscriptions" />
           )}
         </div>
@@ -736,19 +816,35 @@ export function SubscriptionsView() {
 export function InvoicesView() {
   const { data, connection, run } = useWorkspace();
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [status, setStatus] = useState("all");
   const [error, setError] = useState("");
   const selected = data.invoices.find((item) => item.id === selectedId);
+  const filtered = useMemo(
+    () => data.invoices.filter((item) =>
+      `${text(item.invoiceNumber)} ${text(item.customer)}`.toLowerCase().includes(query.toLowerCase())
+      && (status === "all" || text(item.status) === status)),
+    [data.invoices, query, status],
+  );
   const pay = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!selected) return;
     const form = new FormData(event.currentTarget);
+    const enteredAmount = Number(form.get("amount"));
+    const amountMinor = Math.round(enteredAmount * 100);
+    const balanceMinor = amount(selected.totalMinor) - amount(selected.paidMinor);
+    if (!Number.isFinite(enteredAmount) || amountMinor < 1 || amountMinor > balanceMinor) {
+      setError("Enter an amount within the outstanding balance.");
+      return;
+    }
+    setError("");
     try {
       await run(() =>
         mutate(
           `/api/invoices/${selected.id}/payments`,
           "POST",
           {
-            amountMinor: Math.round(Number(form.get("amount")) * 100),
+            amountMinor,
             reference: form.get("reference"),
           },
           crypto.randomUUID(),
@@ -772,6 +868,21 @@ export function InvoicesView() {
         }
       />
       <section className="data-panel">
+        <div className="data-toolbar">
+          <label className="toolbar-search">
+            <Search size={16} />
+            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search invoices" />
+          </label>
+          <CustomSelect
+            className="toolbar-custom-select"
+            ariaLabel="Filter invoices by status"
+            icon={<Filter size={15} />}
+            options={INVOICE_STATUS_OPTIONS}
+            value={status}
+            onChange={setStatus}
+          />
+          <span className="result-count">{filtered.length} records</span>
+        </div>
         <div className="record-table invoice-table">
           <div className="record-table-head">
             <span>Invoice</span>
@@ -780,13 +891,16 @@ export function InvoicesView() {
             <span>Status</span>
             <span />
           </div>
-          {data.invoices.map((item) => (
+          {filtered.map((item) => (
             <div className="record-row" key={text(item.id)}>
               <span className="record-primary">
                 <strong>{text(item.customer)}</strong>
                 <small>INV-{text(item.invoiceNumber).padStart(4, "0")}</small>
               </span>
-              <span data-label="Amount">{formatMoney(item.totalMinor)}</span>
+              <span className="record-money" data-label="Amount">
+                <strong>{formatMoney(item.totalMinor)}</strong>
+                <small>{formatMoney(amount(item.totalMinor) - amount(item.paidMinor))} open</small>
+              </span>
               <span data-label="Due">
                 {new Date(text(item.dueOn)).toLocaleDateString()}
               </span>
@@ -804,7 +918,7 @@ export function InvoicesView() {
               </button>
             </div>
           ))}
-          {!data.invoices.length && <EmptyState title="No invoices" />}
+          {!filtered.length && <EmptyState title="No invoices" />}
         </div>
       </section>
       <Modal
@@ -820,7 +934,9 @@ export function InvoicesView() {
               <input
                 name="amount"
                 type="number"
-                min="1"
+                min="0.01"
+                step="0.01"
+                inputMode="decimal"
                 max={
                   (amount(selected.totalMinor) - amount(selected.paidMinor)) /
                   100
@@ -919,6 +1035,8 @@ export function DealHealthView() {
 
 export function ReportsView() {
   const { data, connection } = useWorkspace();
+  const [downloading, setDownloading] = useState<"pdf" | "xls" | null>(null);
+  const [error, setError] = useState("");
   const quoted = data.quotes.reduce(
     (sum, quote) => sum + amount(quote.totalMinor),
     0,
@@ -931,8 +1049,24 @@ export function ReportsView() {
       data.quotes.length /
       100
     : 0;
-  const download = (format: "pdf" | "xls") => {
-    window.location.assign(`/api/reports/deals.${format}`);
+  const download = async (format: "pdf" | "xls") => {
+    setDownloading(format);
+    setError("");
+    try {
+      const file = await downloadReport(format);
+      const url = URL.createObjectURL(file.blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = file.filename;
+      document.body.append(anchor);
+      anchor.click();
+      anchor.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Report download failed.");
+    } finally {
+      setDownloading(null);
+    }
   };
   return (
     <div className="page-stack">
@@ -945,22 +1079,23 @@ export function ReportsView() {
             <button
               type="button"
               className="secondary-action"
-              disabled={connection === "offline"}
-              onClick={() => download("pdf")}
+              disabled={connection !== "online" || downloading !== null}
+              onClick={() => void download("pdf")}
             >
-              <Download size={17} /> PDF
+              <Download size={17} /> {downloading === "pdf" ? "Preparing" : "PDF"}
             </button>
             <button
               type="button"
               className="secondary-action"
-              disabled={connection === "offline"}
-              onClick={() => download("xls")}
+              disabled={connection !== "online" || downloading !== null}
+              onClick={() => void download("xls")}
             >
-              <Download size={17} /> XLS
+              <Download size={17} /> {downloading === "xls" ? "Preparing" : "XLS"}
             </button>
           </div>
         }
       />
+      <ErrorText value={error} />
       <section className="metric-grid compact">
         <article className="metric-card">
           <span className="metric-icon">

@@ -275,6 +275,7 @@ export default function App() {
   const context = useMemo(
     () => ({
       data: workspace?.data ?? EMPTY_WORKSPACE,
+      role: user?.activeRole ?? "sales_rep",
       connection,
       syncedAt: workspace?.sync.syncedAt ?? null,
       refresh: async () => {

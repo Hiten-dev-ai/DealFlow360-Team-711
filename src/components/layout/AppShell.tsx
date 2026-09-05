@@ -138,6 +138,17 @@ export const APP_VIEW_IDS: readonly AppView[] = [
   "settings",
 ];
 
+const ROLE_NAVIGATION: Record<SessionUser["activeRole"], readonly AppView[]> = {
+  admin: ["dashboard", "quotations", "approvals", "fulfillment", "subscriptions", "invoices", "health", "reports", "teams", "settings"],
+  sales_rep: ["dashboard", "quotations", "health", "reports", "settings"],
+  sales_manager: ["dashboard", "quotations", "approvals", "health", "reports", "settings"],
+  finance_ops: ["dashboard", "quotations", "approvals", "fulfillment", "subscriptions", "invoices", "health", "reports", "settings"],
+};
+
+export function isViewAvailable(view: AppView, role: SessionUser["activeRole"]) {
+  return ROLE_NAVIGATION[role].includes(view);
+}
+
 const WORKSPACE_SEARCH_ITEMS = [
   ...APP_NAVIGATION.map((item) => ({
     key: `view-${item.id}`,
@@ -210,12 +221,13 @@ const WORKSPACE_SEARCH_ITEMS = [
 
 type WorkspaceSearchItem = (typeof WORKSPACE_SEARCH_ITEMS)[number];
 
-function searchWorkspace(query: string, role?: string): WorkspaceSearchItem[] {
+function searchWorkspace(query: string, role: SessionUser["activeRole"]): WorkspaceSearchItem[] {
   const normalized = query.trim().toLowerCase();
-  if (!normalized) return WORKSPACE_SEARCH_ITEMS;
-  return WORKSPACE_SEARCH_ITEMS.filter(
-    (item) => item.view !== "teams" || role === "admin",
-  )
+  const allowedItems = WORKSPACE_SEARCH_ITEMS.filter((item) =>
+    isViewAvailable(item.view, role),
+  );
+  if (!normalized) return allowedItems;
+  return allowedItems
     .map((item) => {
       const label = item.label.toLowerCase();
       const hint = item.hint.toLowerCase();
@@ -422,6 +434,10 @@ export function AppShell({
   }, [searchOpen]);
 
   useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [activeView]);
+
+  useEffect(() => {
     if (!mobileOpen && !notificationsOpen) return;
     document.body.classList.add("drawer-locked");
     return () => document.body.classList.remove("drawer-locked");
@@ -433,7 +449,7 @@ export function AppShell({
   );
 
   const navigate = (view: AppView, settingsCategory?: SettingsCategory) => {
-    onNavigate(view, settingsCategory);
+    onNavigate(isViewAvailable(view, user.activeRole) ? view : "dashboard", settingsCategory);
     setMobileOpen(false);
     setNotificationsOpen(false);
   };
@@ -557,8 +573,8 @@ export function AppShell({
           </button>
         </div>
         <nav className="sidebar-navigation">
-          {APP_NAVIGATION.filter(
-            (item) => !("adminOnly" in item) || user.activeRole === "admin",
+          {APP_NAVIGATION.filter((item) =>
+            isViewAvailable(item.id, user.activeRole),
           ).map((item) => {
             const Icon = item.icon;
             const active = activeView === item.id;

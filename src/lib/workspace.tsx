@@ -1,10 +1,11 @@
 import { createContext, useContext, type ReactNode } from 'react';
-import type { WorkspaceData } from './api';
+import type { Role, WorkspaceData } from './api';
 
 export type ConnectionState = 'online' | 'syncing' | 'offline' | 'degraded';
 
 export interface WorkspaceContextValue {
   data: WorkspaceData;
+  role: Role;
   connection: ConnectionState;
   syncedAt: string | null;
   refresh: () => Promise<void>;
