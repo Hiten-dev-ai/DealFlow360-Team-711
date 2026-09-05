@@ -46,7 +46,7 @@
 :root[data-accent="violet"] { --accent: #6d28d9; --accent-soft: rgba(109, 40, 217, .17); --accent-fill: #ede9fe; --accent-fill-ink: #5b21b6; --accent-ink: #ffffff; }
 
 * { box-sizing: border-box; }
-html { min-width: 320px; background: var(--background); -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+html { min-width: 320px; background: var(--background); scrollbar-gutter: stable; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
 body { margin: 0; min-width: 320px; min-height: 100vh; background: var(--background); color: var(--text); }
 svg { shape-rendering: geometricPrecision; }
 button, input { font: inherit; }
@@ -765,6 +765,7 @@ button.record-row { cursor: pointer; }
 }
 
 @media (max-width: 768px) {
+  html { scrollbar-gutter: auto; }
   :root { --topbar-height: 118px; }
   .login-page { display: block; }
   .login-story { display: none; }
