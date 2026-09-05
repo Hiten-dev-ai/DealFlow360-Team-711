@@ -8,14 +8,18 @@
     "build": "tsc --noEmit && vite build",
     "lint": "tsc --noEmit",
     "test": "vitest run",
-    "server": "node server/index.js"
+    "server": "node server/index.js",
+    "db:migrate": "node server/db/migrate.js"
   },
   "dependencies": {
     "@hono/node-server": "2.1.1",
+    "argon2": "0.44.0",
     "hono": "4.13.5",
     "lucide-react": "0.468.0",
+    "pg": "8.16.3",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "zod": "4.1.12"
   },
   "devDependencies": {
     "@types/react": "19.2.2",
