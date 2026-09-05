@@ -1,5 +1,6 @@
 import { Pool } from 'pg';
 import { hashPassword } from '../auth/password.js';
+import { seedSmokeData } from './smoke-data.js';
 
 const workspaceId = process.env.WORKSPACE_ID ?? '00000000-0000-4000-8000-000000000711';
 const databaseUrl = process.env.DATABASE_URL;
@@ -47,6 +48,7 @@ try {
   const warehouses=[['71150000-0000-4000-8000-000000000001','MAIN','Main Warehouse',1800000],['71150000-0000-4000-8000-000000000002','EAST','East Depot',900000],['71150000-0000-4000-8000-000000000003','SOUTH','South Hub',1200000]];
   for(const row of warehouses)await client.query(`INSERT INTO warehouses(id,workspace_id,code,name,shipping_cost_minor) VALUES($1,$2,$3,$4,$5) ON CONFLICT(id) DO UPDATE SET name=EXCLUDED.name,shipping_cost_minor=EXCLUDED.shipping_cost_minor`,[row[0],workspaceId,...row.slice(1)]);
   const stock=[[0,2,30],[0,3,10],[1,2,18],[1,3,8],[2,2,12],[2,3,24]];for(const [w,p,quantity] of stock)await client.query(`INSERT INTO inventory_levels(warehouse_id,product_id,available_quantity) VALUES($1,$2,$3) ON CONFLICT(warehouse_id,product_id) DO UPDATE SET available_quantity=EXCLUDED.available_quantity`,[warehouses[w][0],products[p][0],quantity]);
+  await seedSmokeData(client, { workspaceId, users, team, tiers, categories, products, customers, warehouses });
   await client.query('COMMIT');
   console.log('DealFlow360 demo workspace provisioned.');
 } catch (error) { await client.query('ROLLBACK'); throw error; } finally { client.release(); await pool.end(); }

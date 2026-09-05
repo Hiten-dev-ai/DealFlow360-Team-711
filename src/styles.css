@@ -75,13 +75,13 @@ button:focus-visible, input:focus-visible { outline: 3px solid color-mix(in srgb
 .pwa-ios-note { display: flex; align-items: center; gap: 10px; padding: 13px; border-radius: 12px; color: var(--text-muted); background: var(--surface-soft); font-size: .78rem; }
 .app-loading { display: grid; min-height: 100dvh; place-content: center; justify-items: center; gap: 12px; color: var(--text-muted); background: var(--page); }
 .server-status-wrap { position: relative; }
-.server-status-trigger { gap: 7px; width: auto !important; min-width: 48px; padding: 0 10px !important; }
-.server-status-dot { display: inline-block; width: 18px; height: 18px; flex: 0 0 18px; border: 3px solid var(--surface); border-radius: 50%; background: #ef4444; box-shadow: 0 0 0 1px var(--border); }
+.server-status-trigger { display: flex; width: auto !important; min-width: 48px; align-items: center; justify-content: center; gap: 6px; padding: 0 9px !important; }
+.server-status-dot { display: inline-block; width: 10px; height: 10px; flex: 0 0 10px; border: 2px solid var(--surface); border-radius: 50%; background: #ef4444; box-shadow: 0 0 0 1px var(--border); }
 .server-status-dot.online { background: #22c55e; }
 .server-status-dot.syncing, .server-status-dot.degraded { background: #f59e0b; }
 .server-status-panel { position: absolute; z-index: 80; top: calc(100% + 9px); right: 0; width: 240px; padding: 14px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); box-shadow: var(--shadow); }
 .server-status-panel header { display: flex; align-items: center; justify-content: space-between; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
-.server-status-panel header .server-status-dot { width: 12px; height: 12px; flex-basis: 12px; border-width: 2px; }
+.server-status-panel header .server-status-dot { width: 10px; height: 10px; flex-basis: 10px; border-width: 2px; }
 .server-status-panel dl { display: grid; gap: 9px; margin: 12px 0 0; }
 .server-status-panel dl div { display: flex; justify-content: space-between; gap: 10px; font-size: .7rem; }
 .server-status-panel dt { color: var(--text-muted); }
@@ -1013,6 +1013,8 @@ button.record-row { cursor: pointer; }
   .notification-trigger { display: grid; }
   .topbar-actions { gap: 5px; }
   .topbar-icon { width: 40px; height: 40px; }
+  .server-status-trigger { min-width: 43px; gap: 4px; padding: 0 6px !important; }
+  .server-status-trigger .server-status-dot { width: 8px; height: 8px; flex-basis: 8px; border-width: 1.5px; }
   .search-suggestions { top: calc(100% + 6px); max-height: min(360px, 58dvh); overflow-y: auto; }
   .search-more { display: none; }
   .settings-page {

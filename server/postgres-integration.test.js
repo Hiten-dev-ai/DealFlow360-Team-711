@@ -47,13 +47,15 @@ describe.runIf(Boolean(databaseUrl))('PostgreSQL end-to-end flow', () => {
 
     const manager = await login(app, 'manager@dealflow360.demo', process.env.DEMO_MANAGER_PASSWORD);
     const managerData = (await (await request(app, '/api/bootstrap', { auth: manager })).json()).data;
-    expect(managerData.approvals).toHaveLength(1);
-    expect((await request(app, `/api/approvals/${managerData.approvals[0].id}/decision`, { method: 'POST', auth: manager, body: { decision: 'approve' } })).status).toBe(200);
+    const managerApproval = managerData.approvals.find((approval) => approval.quoteId === quote.id);
+    expect(managerApproval).toBeTruthy();
+    expect((await request(app, `/api/approvals/${managerApproval.id}/decision`, { method: 'POST', auth: manager, body: { decision: 'approve' } })).status).toBe(200);
 
     const finance = await login(app, 'finance@dealflow360.demo', process.env.DEMO_FINANCE_PASSWORD);
     const financeData = (await (await request(app, '/api/bootstrap', { auth: finance })).json()).data;
-    expect(financeData.approvals).toHaveLength(1);
-    expect((await request(app, `/api/approvals/${financeData.approvals[0].id}/decision`, { method: 'POST', auth: finance, body: { decision: 'approve' } })).status).toBe(200);
+    const financeApproval = financeData.approvals.find((approval) => approval.quoteId === quote.id);
+    expect(financeApproval).toBeTruthy();
+    expect((await request(app, `/api/approvals/${financeApproval.id}/decision`, { method: 'POST', auth: finance, body: { decision: 'approve' } })).status).toBe(200);
 
     const linkResponse = await request(app, `/api/quotes/${quote.id}/portal-link`, { method: 'POST', auth: sales });
     expect(linkResponse.status).toBe(200);
@@ -70,7 +72,7 @@ describe.runIf(Boolean(databaseUrl))('PostgreSQL end-to-end flow', () => {
     expect(completed.fulfillment.length).toBeGreaterThan(0);
     expect(completed.subscriptions.length).toBeGreaterThan(0);
     expect(completed.invoices.length).toBeGreaterThan(0);
-    const invoice = completed.invoices[0];
+    const invoice = completed.invoices.find((record) => record.quoteId === quote.id) ?? completed.invoices[0];
     const payment = await request(app, `/api/invoices/${invoice.id}/payments`, { method: 'POST', auth: finance, body: { amountMinor: Number(invoice.totalMinor) - Number(invoice.paidMinor), reference: 'E2E-TEST' } });
     payment.headers;
     expect(payment.status).toBe(400);
