@@ -1,4 +1,5 @@
 import { ArrowUpRight, CheckCircle2, CircleDollarSign, Clock3, FileText, Route } from 'lucide-react';
+import type { AppView } from '../components/layout/AppShell';
 
 const metrics = [
   { label: 'Open quotations', value: '24', note: 'Active workspace items', icon: FileText },
@@ -7,12 +8,19 @@ const metrics = [
   { label: 'Pipeline value', value: '₹18.4L', note: 'Open opportunity value', icon: CircleDollarSign },
 ];
 
-export function OverviewView() {
+const flow: Array<{ label: string; view: AppView }> = [
+  { label: 'Quotation', view: 'quotations' },
+  { label: 'Approval', view: 'approvals' },
+  { label: 'Fulfillment', view: 'fulfillment' },
+  { label: 'Billing', view: 'invoices' },
+];
+
+export function OverviewView({ onNavigate }: { onNavigate: (view: AppView) => void }) {
   return (
     <div className="page-stack">
       <section className="page-heading">
-        <div><span className="page-kicker">Sales operations</span><h2>Deal workspace</h2><p>Track the path from quotation to fulfillment.</p></div>
-        <button type="button" className="primary-action">New quotation <ArrowUpRight size={17} /></button>
+        <div><span className="page-kicker">Sales operations</span><h2>Sales dashboard</h2><p>Track the path from quotation to payment.</p></div>
+        <button type="button" className="primary-action" onClick={() => onNavigate('quotations')}>New quotation <ArrowUpRight size={17} /></button>
       </section>
 
       <section className="metric-grid" aria-label="Workspace metrics">
@@ -27,10 +35,10 @@ export function OverviewView() {
       </section>
 
       <section className="flow-card">
-        <div className="flow-heading"><span><Route size={19} /></span><div><h3>Core deal flow</h3><p>The workspace structure is ready for business modules.</p></div></div>
+        <div className="flow-heading"><span><Route size={19} /></span><div><h3>Core deal flow</h3><p>Open any stage to continue the workflow.</p></div></div>
         <div className="flow-steps">
-          {['Quotation', 'Approval', 'Fulfillment', 'Billing'].map((step, index) => (
-            <div className="flow-step" key={step}><span>{index + 1}</span><strong>{step}</strong></div>
+          {flow.map((step, index) => (
+            <button type="button" className="flow-step" key={step.label} onClick={() => onNavigate(step.view)}><span>{index + 1}</span><strong>{step.label}</strong><ArrowUpRight size={14} /></button>
           ))}
         </div>
       </section>
