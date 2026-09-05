@@ -9,6 +9,9 @@ for key in DEMO_ADMIN_PASSWORD DEMO_SALES_PASSWORD DEMO_MANAGER_PASSWORD DEMO_FI
     printf '%s=%s\n' "$key" "$value" >> "$env_file"
   fi
 done
+if ! grep -q '^SETTINGS_ENCRYPTION_KEY=' "$env_file"; then
+  printf 'SETTINGS_ENCRYPTION_KEY=%s\n' "$(openssl rand -hex 32)" >> "$env_file"
+fi
 if ! grep -q '^SEED_DEMO=' "$env_file"; then
   printf 'SEED_DEMO=true\n' >> "$env_file"
 fi

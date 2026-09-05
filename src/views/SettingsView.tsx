@@ -1,11 +1,12 @@
-import { useEffect, useState } from 'react';
-import { ArrowLeft, Bell, Check, ChevronRight, Monitor, Moon, Palette, Sun, UserRound } from 'lucide-react';
-import type { SessionUser } from '../lib/api';
+import { useEffect, useState, type FormEvent } from 'react';
+import { ArrowLeft, Bell, Check, ChevronRight, LockKeyhole, Monitor, Moon, Palette, Server, Sun, UserRound } from 'lucide-react';
+import { apiFetch, mutate, type SessionUser } from '../lib/api';
 import type { NotificationPreferences } from '../lib/preferences';
+import { useWorkspace } from '../lib/workspace';
 
 export type ThemeMode = 'light' | 'dark' | 'system';
 export type Accent = 'blue' | 'green' | 'amber' | 'violet';
-export type SettingsCategory = 'profile' | 'appearance' | 'notifications';
+export type SettingsCategory = 'profile' | 'appearance' | 'notifications' | 'environment';
 
 interface SettingsViewProps {
   user: SessionUser;
@@ -19,7 +20,7 @@ interface SettingsViewProps {
   onNotificationPreferencesChange: (next: Partial<NotificationPreferences>) => void;
 }
 
-const categoryGroups = [
+const personalCategoryGroups = [
   {
     label: 'Personal',
     items: [
@@ -37,6 +38,7 @@ const categoryLabels: Record<SettingsCategory, string> = {
   profile: 'Profile',
   notifications: 'Notifications',
   appearance: 'Appearance',
+  environment: 'Environment',
 };
 
 export function SettingsView({
@@ -65,6 +67,9 @@ export function SettingsView({
     setCategory(next);
     setMobileDetailOpen(true);
   };
+  const categoryGroups = user.activeRole === 'admin'
+    ? [...personalCategoryGroups, { label: 'Server', items: [{ id: 'environment' as const, label: 'Environment', detail: 'SMTP delivery', icon: Server }] }]
+    : personalCategoryGroups;
 
   return (
     <div className="settings-page">
@@ -105,6 +110,7 @@ export function SettingsView({
           {category === 'profile' && <ProfileSettings user={user} />}
           {category === 'appearance' && <AppearanceSettings theme={theme} accent={accent} onThemeChange={onThemeChange} onAccentChange={onAccentChange} />}
           {category === 'notifications' && <NotificationSettings preferences={notificationPreferences} onChange={onNotificationPreferencesChange} />}
+          {category === 'environment' && user.activeRole === 'admin' && <EnvironmentSettings />}
         </section>
       </div>
     </div>
@@ -125,6 +131,83 @@ function AppearanceSettings({ theme, accent, onThemeChange, onAccentChange }: { 
 
 function NotificationSettings({ preferences, onChange }: { preferences: NotificationPreferences; onChange: (next: Partial<NotificationPreferences>) => void }) {
   return <div className="settings-panel"><SettingsHeader eyebrow="Deal alerts" title="Notifications" /><div className="settings-card"><div className="setting-group"><h3>Delivery</h3><div className="toggle-list"><ToggleRow label="Desktop alerts" description="Show deal updates" checked={preferences.desktopAlerts} onChange={(desktopAlerts) => onChange({ desktopAlerts })} /><ToggleRow label="Alert sounds" description="Sound for urgent events" checked={preferences.soundAlerts} onChange={(soundAlerts) => onChange({ soundAlerts })} /><ToggleRow label="Priority only" description="Approvals and risks only" checked={preferences.priorityOnly} onChange={(priorityOnly) => onChange({ priorityOnly })} /></div></div></div></div>;
+}
+
+interface EnvironmentState {
+  smtpConfigured: boolean;
+  smtpHost: string | null;
+  source: 'workspace' | 'server' | 'none';
+  mailFrom: string;
+  version: number;
+  updatedAt: string | null;
+  encryptionReady: boolean;
+}
+
+function EnvironmentSettings() {
+  const { connection, run } = useWorkspace();
+  const [environment, setEnvironment] = useState<EnvironmentState | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+  const load = async () => {
+    setLoading(true);
+    try {
+      const response = await apiFetch<{ data: EnvironmentState }>('/api/admin/environment');
+      setEnvironment(response.data);
+      setError('');
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Could not load environment settings.');
+    } finally {
+      setLoading(false);
+    }
+  };
+  useEffect(() => { void load(); }, []);
+  const save = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
+    const smtpUrl = String(form.get('smtpUrl') ?? '').trim();
+    const mailFrom = String(form.get('mailFrom') ?? '').trim();
+    setError('');
+    setMessage('');
+    try {
+      const response = await run(() => mutate<{ data: EnvironmentState }>('/api/admin/environment', 'PATCH', { ...(smtpUrl ? { smtpUrl } : {}), mailFrom }));
+      setEnvironment(response.data);
+      setMessage('Environment saved.');
+      formElement.reset();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Could not save environment.');
+    }
+  };
+  const disable = async () => {
+    setError('');
+    setMessage('');
+    try {
+      const response = await run(() => mutate<{ data: EnvironmentState }>('/api/admin/environment', 'PATCH', { clearSmtp: true }));
+      setEnvironment(response.data);
+      setMessage('Workspace SMTP disabled.');
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Could not disable SMTP.');
+    }
+  };
+  return <div className="settings-panel environment-settings">
+    <SettingsHeader eyebrow="Server" title="Environment" />
+    <div className="settings-card">
+      <div className="environment-status">
+        <span className={`environment-status-icon ${environment?.smtpConfigured ? 'ready' : ''}`}><Server size={19} /></span>
+        <span><strong>{loading ? 'Checking SMTP' : environment?.smtpConfigured ? 'SMTP configured' : 'Copy-link mode'}</strong><small>{environment?.smtpHost ?? 'Customer links are copied manually'}</small></span>
+        <span className={`status-pill ${environment?.smtpConfigured ? 'success' : 'warning'}`}>{environment?.source ?? 'none'}</span>
+      </div>
+      <form className="modal-form" onSubmit={save}>
+        <label><span>SMTP connection URL</span><input name="smtpUrl" type="password" autoComplete="off" placeholder={environment?.smtpConfigured ? 'Leave blank to keep current' : 'smtps://user:password@mail.example.com'} /></label>
+        <label><span>Sender</span><input name="mailFrom" defaultValue={environment?.mailFrom ?? ''} placeholder="DealFlow360 <sales@example.com>" required /></label>
+        <div className="form-note"><LockKeyhole size={16} /><span>Credentials are encrypted and never returned to the browser.</span></div>
+        {message && <p className="settings-success">{message}</p>}
+        {error && <p className="login-error">{error}</p>}
+        <div className="modal-actions split"><button type="button" className="secondary-action" disabled={connection !== 'online' || !environment?.smtpConfigured} onClick={() => void disable()}>Disable SMTP</button><button type="submit" className="primary-action" disabled={connection !== 'online' || !environment?.encryptionReady}>Save environment</button></div>
+      </form>
+    </div>
+  </div>;
 }
 
 function ToggleRow({ label, description, checked, onChange }: { label: string; description: string; checked: boolean; onChange: (checked: boolean) => void }) {

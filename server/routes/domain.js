@@ -8,6 +8,11 @@ import { calculateQuote, invoiceStatus, prorateMinor } from "../domain/rules.js"
 import { hashSessionToken } from "../auth/session.js";
 import { csrfTokenForSession } from "../auth/csrf.js";
 import { readCookie, sessionCookie } from "../http/cookies.js";
+import {
+  encryptSetting,
+  resolveMailSettings,
+  smtpHost,
+} from "../services/environment.js";
 
 const uuid = z.string().uuid();
 const quoteInput = z.object({
@@ -292,6 +297,8 @@ export function registerDomainRoutes(app, { store, config, auth }) {
       `UPDATE invoices SET status='overdue',updated_at=now() WHERE workspace_id=$1 AND status='due' AND due_on<current_date`,
       [current.user.workspaceId],
     );
+    const scopedQuotes = quoteScope(current);
+    const canReadOperations = current.role === "admin" || current.role === "finance_ops";
     await store.query(
       `INSERT INTO deal_alerts(workspace_id,quote_id,category,severity,title,message)
       SELECT q.workspace_id,q.id,'stalled','medium','Stalled quotation','No quotation activity for more than three days.' FROM quotes q
@@ -320,32 +327,32 @@ export function registerDomainRoutes(app, { store, config, auth }) {
         WHERE q.workspace_id=$1 AND ar.status='pending' AND (($2='admin') OR ($2='sales_manager' AND ar.stage='manager' AND q.team_id=$3) OR ($2='finance_ops' AND ar.stage='finance')) ORDER BY ar.created_at`,
         [current.user.workspaceId, current.role, current.user.teamId],
       ),
-      store.query(
+      canReadOperations ? store.query(
         `SELECT o.id, o.quote_id AS "quoteId", o.status, o.version, q.quote_number AS "quoteNumber", c.name AS customer,
         COALESCE((SELECT json_agg(json_build_object('id',s.id,'warehouse',w.name,'status',s.status,'shippingCostMinor',s.shipping_cost_minor,'lines',s.lines)) FROM shipments s LEFT JOIN warehouses w ON w.id=s.warehouse_id WHERE s.order_id=o.id),'[]') AS shipments
         FROM orders o JOIN quotes q ON q.id=o.quote_id JOIN customers c ON c.id=q.customer_id WHERE o.workspace_id=$1 ORDER BY o.updated_at DESC`,
         [current.user.workspaceId],
-      ),
-      store.query(
+      ) : Promise.resolve({ rows: [] }),
+      canReadOperations ? store.query(
         `SELECT s.id,s.quote_id AS "quoteId",s.status,s.cadence,s.quantity,s.unit_price_minor AS "unitPriceMinor",s.next_bill_on AS "nextBillOn",s.version,c.name AS customer,p.name AS plan FROM subscriptions s JOIN customers c ON c.id=s.customer_id JOIN products p ON p.id=s.product_id WHERE s.workspace_id=$1 ORDER BY s.created_at DESC`,
         [current.user.workspaceId],
-      ),
-      store.query(
+      ) : Promise.resolve({ rows: [] }),
+      canReadOperations ? store.query(
         `SELECT i.id,i.quote_id AS "quoteId",i.subscription_id AS "subscriptionId",i.invoice_number AS "invoiceNumber",i.status,i.total_minor AS "totalMinor",i.paid_minor AS "paidMinor",i.due_on AS "dueOn",i.version,c.name AS customer FROM invoices i JOIN customers c ON c.id=i.customer_id WHERE i.workspace_id=$1 ORDER BY i.created_at DESC`,
         [current.user.workspaceId],
-      ),
+      ) : Promise.resolve({ rows: [] }),
       store.query(
-        `SELECT id,quote_id AS "quoteId",category,severity,title,message,created_at AS "createdAt" FROM deal_alerts WHERE workspace_id=$1 AND resolved_at IS NULL ORDER BY created_at DESC`,
-        [current.user.workspaceId],
+        `SELECT a.id,a.quote_id AS "quoteId",a.category,a.severity,a.title,a.message,a.created_at AS "createdAt" FROM deal_alerts a JOIN quotes q ON q.id=a.quote_id WHERE a.workspace_id=$1 AND a.resolved_at IS NULL${scopedQuotes.sql} ORDER BY a.created_at DESC`,
+        [current.user.workspaceId, ...scopedQuotes.params],
       ),
       store.query(
         `SELECT id,category,title,message,target_type AS "targetType",target_id AS "targetId",priority,read_at AS "readAt",created_at AS "createdAt" FROM notifications WHERE user_id=$1 AND dismissed_at IS NULL ORDER BY created_at DESC LIMIT 100`,
         [current.user.id],
       ),
-      store.query(
+      current.role === "admin" ? store.query(
         `SELECT t.id,t.name,t.manager_user_id AS "managerUserId",t.version,COALESCE(json_agg(json_build_object('id',u.id,'fullName',u.full_name,'email',u.email,'role',m.role)) FILTER (WHERE u.id IS NOT NULL),'[]') AS members FROM sales_teams t LEFT JOIN workspace_memberships m ON m.team_id=t.id LEFT JOIN users u ON u.id=m.user_id WHERE t.workspace_id=$1 GROUP BY t.id ORDER BY t.name`,
         [current.user.workspaceId],
-      ),
+      ) : Promise.resolve({ rows: [] }),
       store.query(
         `SELECT c.id,c.name,c.email,c.company,c.version,t.name AS tier,t.id AS "tierId" FROM customers c LEFT JOIN customer_tiers t ON t.id=c.tier_id WHERE c.workspace_id=$1 ORDER BY c.name`,
         [current.user.workspaceId],
@@ -850,7 +857,7 @@ export function registerDomainRoutes(app, { store, config, auth }) {
       const result = await store.query(
         `INSERT INTO portal_links(workspace_id,customer_id,quote_id,token_hash,expires_at,created_by)
          SELECT q.workspace_id,q.customer_id,q.id,$2,now()+interval '30 minutes',$3 FROM quotes q
-         WHERE q.id=$1 AND q.workspace_id=$4 AND ($5='admin' OR ($5='sales_rep' AND q.owner_user_id=$3) OR ($5='sales_manager' AND q.team_id=$6))
+         WHERE q.id=$1 AND q.workspace_id=$4 AND q.status='approved' AND ($5='admin' OR ($5='sales_rep' AND q.owner_user_id=$3) OR ($5='sales_manager' AND q.team_id=$6))
          RETURNING id,quote_id AS "quoteId",customer_id AS "customerId",expires_at AS "expiresAt"`,
         [
           c.req.param("id"),
@@ -873,11 +880,12 @@ export function registerDomainRoutes(app, { store, config, auth }) {
         ])
       ).rows[0];
       let delivered = false;
-      if (config.smtpUrl) {
+      const mail = await resolveMailSettings(store, config, current.user.workspaceId);
+      if (mail.smtpUrl) {
         try {
-          const transport = nodemailer.createTransport(config.smtpUrl);
+          const transport = nodemailer.createTransport(mail.smtpUrl);
           await transport.sendMail({
-            from: config.mailFrom,
+            from: mail.mailFrom,
             to: customer.email,
             subject: "Review your DealFlow360 quotation",
             text: `Hello ${customer.name}, review your quotation: ${link}`,
@@ -1586,7 +1594,161 @@ export function registerDomainRoutes(app, { store, config, auth }) {
         parsed.data.managerUserId ?? null,
       ],
     );
+    await store.writeAudit({
+      userId: current.user.id,
+      workspaceId: current.user.workspaceId,
+      action: "team.created",
+      metadata: { teamId: result.rows[0].id },
+    });
+    await writeChange(store, current.user.workspaceId, "team", result.rows[0].id, result.rows[0].version);
     return c.json({ data: result.rows[0] }, 201);
+  });
+
+  app.patch("/api/admin/teams/:id", auth.capability("teams.manage"), async (c) => {
+    const unavailable = dbRequired(c, store);
+    if (unavailable) return unavailable;
+    const parsed = z.object({
+      name: z.string().trim().min(2).max(80).optional(),
+      managerUserId: uuid.nullable().optional(),
+      expectedVersion: z.number().int().positive(),
+    }).refine((value) => value.name !== undefined || value.managerUserId !== undefined).safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return c.json({ error: "Invalid team update.", code: "INVALID_INPUT" }, 400);
+    const current = c.get("auth");
+    if (parsed.data.managerUserId) {
+      const manager = await store.query(
+        `SELECT 1 FROM workspace_memberships WHERE user_id=$1 AND workspace_id=$2 AND team_id=$3 AND role='sales_manager'`,
+        [parsed.data.managerUserId, current.user.workspaceId, c.req.param("id")],
+      );
+      if (!manager.rowCount) return c.json({ error: "Choose a Sales Manager from this team.", code: "MANAGER_NOT_FOUND" }, 400);
+    }
+    const managerSpecified = parsed.data.managerUserId !== undefined;
+    const result = await store.query(
+      `UPDATE sales_teams SET name=COALESCE($3,name),manager_user_id=CASE WHEN $4 THEN $5 ELSE manager_user_id END,version=version+1,updated_at=now()
+       WHERE id=$1 AND workspace_id=$2 AND version=$6
+       RETURNING id,name,manager_user_id AS "managerUserId",version`,
+      [c.req.param("id"), current.user.workspaceId, parsed.data.name ?? null, managerSpecified, parsed.data.managerUserId ?? null, parsed.data.expectedVersion],
+    );
+    if (!result.rowCount) return c.json({ error: "Team changed on another device.", code: "VERSION_CONFLICT" }, 409);
+    await store.writeAudit({ userId: current.user.id, workspaceId: current.user.workspaceId, action: "team.updated", metadata: { teamId: c.req.param("id") } });
+    await writeChange(store, current.user.workspaceId, "team", result.rows[0].id, result.rows[0].version);
+    return c.json({ data: result.rows[0] });
+  });
+
+  app.delete("/api/admin/teams/:id", auth.capability("teams.manage"), async (c) => {
+    const unavailable = dbRequired(c, store);
+    if (unavailable) return unavailable;
+    const parsed = z.object({ expectedVersion: z.number().int().positive() }).safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return c.json({ error: "Invalid team version.", code: "INVALID_INPUT" }, 400);
+    const current = c.get("auth");
+    const dependencies = await store.query(
+      `SELECT
+        (SELECT count(*)::int FROM workspace_memberships WHERE team_id=$1) AS members,
+        (SELECT count(*)::int FROM quotes WHERE team_id=$1) AS quotes`,
+      [c.req.param("id")],
+    );
+    if (number(dependencies.rows[0]?.members) || number(dependencies.rows[0]?.quotes)) {
+      return c.json({ error: "Move team members and quotations before deleting this team.", code: "TEAM_IN_USE" }, 409);
+    }
+    const result = await store.query(
+      `DELETE FROM sales_teams WHERE id=$1 AND workspace_id=$2 AND version=$3 RETURNING id`,
+      [c.req.param("id"), current.user.workspaceId, parsed.data.expectedVersion],
+    );
+    if (!result.rowCount) return c.json({ error: "Team changed on another device.", code: "VERSION_CONFLICT" }, 409);
+    await store.writeAudit({ userId: current.user.id, workspaceId: current.user.workspaceId, action: "team.deleted", metadata: { teamId: c.req.param("id") } });
+    await writeChange(store, current.user.workspaceId, "team", result.rows[0].id, parsed.data.expectedVersion + 1, "delete");
+    return c.json({ data: { id: result.rows[0].id } });
+  });
+
+  app.patch("/api/admin/teams/:teamId/members/:userId", auth.capability("teams.manage"), async (c) => {
+    const unavailable = dbRequired(c, store);
+    if (unavailable) return unavailable;
+    const parsed = z.object({ role: z.enum(["admin", "sales_rep", "sales_manager", "finance_ops"]) }).safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return c.json({ error: "Invalid member role.", code: "INVALID_INPUT" }, 400);
+    const current = c.get("auth");
+    if (c.req.param("userId") === current.user.id) return c.json({ error: "Use another admin to change your own access.", code: "SELF_ROLE_CHANGE" }, 409);
+    try {
+      const data = await store.transaction(async (client) => {
+        const membership = (await client.query(
+          `SELECT role FROM workspace_memberships WHERE user_id=$1 AND workspace_id=$2 AND team_id=$3 FOR UPDATE`,
+          [c.req.param("userId"), current.user.workspaceId, c.req.param("teamId")],
+        )).rows[0];
+        if (!membership) throw Object.assign(new Error("Team member not found."), { status: 404, code: "MEMBER_NOT_FOUND" });
+        if (membership.role === "admin" && parsed.data.role !== "admin") {
+          const admins = await client.query(`SELECT count(*)::int AS count FROM workspace_memberships WHERE workspace_id=$1 AND role='admin'`, [current.user.workspaceId]);
+          if (number(admins.rows[0].count) <= 1) throw Object.assign(new Error("Keep at least one workspace admin."), { status: 409, code: "LAST_ADMIN" });
+        }
+        await client.query(
+          `UPDATE workspace_memberships SET role=$4 WHERE user_id=$1 AND workspace_id=$2 AND team_id=$3`,
+          [c.req.param("userId"), current.user.workspaceId, c.req.param("teamId"), parsed.data.role],
+        );
+        if (parsed.data.role !== "sales_manager") await client.query(`UPDATE sales_teams SET manager_user_id=NULL,version=version+1,updated_at=now() WHERE id=$1 AND manager_user_id=$2`, [c.req.param("teamId"), c.req.param("userId")]);
+        await writeChange(client, current.user.workspaceId, "team", c.req.param("teamId"));
+        await writeAudit(client, current, "team.member_role_updated", { teamId: c.req.param("teamId"), userId: c.req.param("userId"), role: parsed.data.role });
+        return { userId: c.req.param("userId"), role: parsed.data.role };
+      });
+      return c.json({ data });
+    } catch (error) {
+      return c.json({ error: error.message, code: error.code ?? "MEMBER_UPDATE_FAILED" }, error.status ?? 500);
+    }
+  });
+
+  app.delete("/api/admin/teams/:teamId/members/:userId", auth.capability("teams.manage"), async (c) => {
+    const unavailable = dbRequired(c, store);
+    if (unavailable) return unavailable;
+    const current = c.get("auth");
+    if (c.req.param("userId") === current.user.id) return c.json({ error: "You cannot remove yourself from your team.", code: "SELF_REMOVE" }, 409);
+    const result = await store.query(
+      `UPDATE workspace_memberships SET team_id=NULL WHERE user_id=$1 AND workspace_id=$2 AND team_id=$3 RETURNING user_id`,
+      [c.req.param("userId"), current.user.workspaceId, c.req.param("teamId")],
+    );
+    if (!result.rowCount) return c.json({ error: "Team member not found.", code: "MEMBER_NOT_FOUND" }, 404);
+    await store.query(`UPDATE sales_teams SET manager_user_id=NULL,version=version+1,updated_at=now() WHERE id=$1 AND manager_user_id=$2`, [c.req.param("teamId"), c.req.param("userId")]);
+    await writeChange(store, current.user.workspaceId, "team", c.req.param("teamId"));
+    await store.writeAudit({ userId: current.user.id, workspaceId: current.user.workspaceId, action: "team.member_removed", metadata: { teamId: c.req.param("teamId"), userId: c.req.param("userId") } });
+    return c.json({ data: { userId: result.rows[0].user_id } });
+  });
+
+  app.get("/api/admin/environment", auth.capability("environment.manage"), async (c) => {
+    const unavailable = dbRequired(c, store);
+    if (unavailable) return unavailable;
+    const current = c.get("auth");
+    const mail = await resolveMailSettings(store, config, current.user.workspaceId);
+    return c.json({ data: {
+      smtpConfigured: Boolean(mail.smtpUrl),
+      smtpHost: smtpHost(mail.smtpUrl),
+      source: mail.source,
+      mailFrom: mail.mailFrom,
+      version: mail.version ?? 0,
+      updatedAt: mail.updatedAt ?? null,
+      encryptionReady: Boolean(config.settingsEncryptionKey),
+    } });
+  });
+
+  app.patch("/api/admin/environment", auth.capability("environment.manage"), async (c) => {
+    const unavailable = dbRequired(c, store);
+    if (unavailable) return unavailable;
+    const parsed = z.object({
+      smtpUrl: z.string().trim().max(1000).refine((value) => value === "" || /^smtps?:\/\//i.test(value), "Use an smtp:// or smtps:// URL.").optional(),
+      mailFrom: z.string().trim().min(3).max(254).optional(),
+      clearSmtp: z.boolean().optional(),
+    }).refine((value) => value.smtpUrl !== undefined || value.mailFrom !== undefined || value.clearSmtp).safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return c.json({ error: "Enter valid environment settings.", code: "INVALID_INPUT" }, 400);
+    const current = c.get("auth");
+    const changeSmtp = parsed.data.smtpUrl !== undefined || parsed.data.clearSmtp === true;
+    if (parsed.data.smtpUrl && !config.settingsEncryptionKey) return c.json({ error: "Server-side encryption is not configured.", code: "ENCRYPTION_UNAVAILABLE" }, 503);
+    const encrypted = parsed.data.smtpUrl ? encryptSetting(parsed.data.smtpUrl, config.settingsEncryptionKey) : null;
+    await store.query(
+      `INSERT INTO workspace_environment_settings(workspace_id,smtp_url_encrypted,mail_from,updated_by)
+       VALUES($1,$2,$3,$4)
+       ON CONFLICT(workspace_id) DO UPDATE SET
+         smtp_url_encrypted=CASE WHEN $5 THEN EXCLUDED.smtp_url_encrypted ELSE workspace_environment_settings.smtp_url_encrypted END,
+         mail_from=COALESCE(EXCLUDED.mail_from,workspace_environment_settings.mail_from),
+         version=workspace_environment_settings.version+1,updated_by=$4,updated_at=now()`,
+      [current.user.workspaceId, encrypted, parsed.data.mailFrom ?? null, current.user.id, changeSmtp],
+    );
+    await store.writeAudit({ userId: current.user.id, workspaceId: current.user.workspaceId, action: "environment.smtp_updated", metadata: { smtpChanged: changeSmtp, smtpConfigured: Boolean(parsed.data.smtpUrl), mailFromChanged: parsed.data.mailFrom !== undefined } });
+    const mail = await resolveMailSettings(store, config, current.user.workspaceId);
+    return c.json({ data: { smtpConfigured: Boolean(mail.smtpUrl), smtpHost: smtpHost(mail.smtpUrl), source: mail.source, mailFrom: mail.mailFrom, version: mail.version, updatedAt: mail.updatedAt, encryptionReady: Boolean(config.settingsEncryptionKey) } });
   });
 
   const renderReport = async (c, format) => {

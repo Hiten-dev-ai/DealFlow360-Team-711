@@ -6,7 +6,7 @@ export const ROLE_CAPABILITIES = Object.freeze({
     'quotes.read.all', 'quotes.write.all', 'quotes.submit',
     'approvals.manager', 'approvals.finance',
     'fulfillment.manage', 'billing.manage', 'reports.read.all',
-    'catalog.manage', 'teams.manage', 'users.manage',
+    'catalog.manage', 'teams.manage', 'users.manage', 'environment.manage',
     'settings.manage',
   ]),
   sales_rep: Object.freeze([

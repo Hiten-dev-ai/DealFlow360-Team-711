@@ -107,6 +107,23 @@ button:focus-visible, input:focus-visible { outline: 3px solid color-mix(in srgb
 .portal-lines small { color: var(--text-muted); }
 .portal-total { margin-bottom: 20px; font-size: 1.1rem; }
 .portal-total strong { font-size: 1.35rem; }
+.portal-header small { display: inline-flex; align-items: center; gap: 5px; }
+.portal-loading { margin: 0; color: var(--text-muted); text-align: center; }
+.portal-lines article > strong { flex: 0 0 auto; font-size: .76rem; }
+.portal-response textarea { width: 100%; min-height: 92px; resize: vertical; padding: 12px; border: 1px solid var(--border); border-radius: 11px; outline: 0; color: var(--text); background: var(--surface-soft); font: inherit; }
+.portal-response textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.portal-counter { overflow: hidden; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-soft); }
+.portal-counter summary { display: flex; min-height: 44px; align-items: center; justify-content: space-between; padding: 0 12px; color: var(--text); font-size: .7rem; font-weight: 780; cursor: pointer; list-style: none; }
+.portal-counter summary::-webkit-details-marker { display: none; }
+.portal-counter[open] summary { border-bottom: 1px solid var(--border); }
+.portal-counter[open] summary svg { transform: rotate(180deg); }
+.portal-counter > div { display: grid; gap: 10px; padding: 12px; }
+.portal-actions { display: grid; grid-template-columns: 1fr 1fr 1.25fr; gap: 8px; }
+.portal-actions > button { width: 100%; }
+.portal-outcome { display: flex; align-items: center; gap: 11px; padding: 14px; border: 1px solid color-mix(in srgb, var(--success) 28%, var(--border)); border-radius: 12px; color: var(--success); background: color-mix(in srgb, var(--success) 9%, var(--surface)); }
+.portal-outcome > span { display: grid; gap: 3px; }
+.portal-outcome strong { color: var(--text); font-size: .76rem; }
+.portal-outcome small { color: var(--text-muted); font-size: .65rem; }
 .modal-form textarea { min-height: 82px; resize: vertical; }
 .modal-form details { padding: 12px; border: 1px solid var(--border); border-radius: 12px; }
 .modal-form summary { cursor: pointer; font-weight: 750; }
@@ -1036,6 +1053,36 @@ button.record-row { cursor: pointer; }
 .action-center-empty strong { color: var(--text); font-size: .78rem; }
 .action-center-empty span { color: var(--text-muted); font-size: .65rem; }
 
+.team-card-button { width: 100%; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.team-card-button:hover { border-color: color-mix(in srgb, var(--accent) 38%, var(--border)); background: color-mix(in srgb, var(--accent-soft) 42%, var(--surface)); }
+.team-card-button footer { display: flex; align-items: center; justify-content: space-between; padding-top: 12px; border-top: 1px solid var(--border); color: var(--accent); font-size: .69rem; font-weight: 800; }
+.team-admin-grid { display: grid; grid-template-columns: minmax(270px, .75fr) minmax(440px, 1.4fr); align-items: start; gap: 14px; }
+.team-configuration-card, .team-members-card { padding: 18px; border: 1px solid var(--border); border-radius: 17px; background: var(--surface); }
+.team-edit-field { display: grid; gap: 7px; }
+.team-edit-field > span { color: var(--text-muted); font-size: .66rem; font-weight: 760; }
+.team-edit-field > div { display: flex; gap: 8px; }
+.team-edit-field input { width: 100%; min-width: 0; height: 44px; padding: 0 12px; border: 1px solid var(--border); border-radius: 11px; outline: 0; color: var(--text); background: var(--surface-soft); }
+.team-edit-field input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.danger-zone p { margin: 0 0 12px; color: var(--text-muted); font-size: .68rem; }
+.team-member-admin-list { display: grid; gap: 8px; }
+.team-member-admin-list article { display: grid; grid-template-columns: 38px minmax(130px, 1fr) minmax(150px, 190px) 38px; align-items: center; gap: 10px; padding: 10px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-soft); }
+.team-member-admin-list article > i { display: grid; width: 36px; height: 36px; place-items: center; border-radius: 10px; color: var(--accent-fill-ink); background: var(--accent-fill); font-size: .65rem; font-style: normal; font-weight: 850; }
+.team-member-admin-list article > span { display: grid; min-width: 0; gap: 3px; }
+.team-member-admin-list article > span strong, .team-member-admin-list article > span small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.team-member-admin-list article > span strong { font-size: .73rem; }
+.team-member-admin-list article > span small { color: var(--text-muted); font-size: .61rem; }
+.team-member-admin-list .custom-select-trigger { min-height: 38px; }
+.manager-chip { grid-column: 2 / -1; display: flex !important; width: max-content; align-items: center; grid-auto-flow: column; gap: 5px !important; color: var(--success); font-size: .59rem; font-weight: 800; }
+.danger-icon { color: var(--danger); }
+.mobile-page-back { display: inline-flex; width: max-content; min-height: 40px; align-items: center; gap: 7px; padding: 0 12px; border: 1px solid var(--border); border-radius: 10px; color: var(--text); background: var(--surface); font: inherit; font-size: .69rem; font-weight: 780; cursor: pointer; }
+.environment-status { display: grid; grid-template-columns: 42px 1fr auto; align-items: center; gap: 11px; padding: 13px; border: 1px solid var(--border); border-radius: 13px; background: var(--surface-soft); }
+.environment-status-icon { display: grid; width: 40px; height: 40px; place-items: center; border-radius: 11px; color: var(--text-muted); background: var(--border); }
+.environment-status-icon.ready { color: var(--success); background: color-mix(in srgb, var(--success) 13%, transparent); }
+.environment-status > span:nth-child(2) { display: grid; gap: 3px; }
+.environment-status strong { font-size: .74rem; }
+.environment-status small { color: var(--text-muted); font-size: .63rem; }
+.settings-success { margin: 0; color: var(--success); font-size: .7rem; font-weight: 750; }
+
 @media (max-width: 768px) {
   .notification-trigger { display: grid; }
   .topbar-actions { gap: 5px; }
@@ -1052,6 +1099,32 @@ button.record-row { cursor: pointer; }
   .invoice-table .row-action { grid-column: auto; }
   .invoice-table .record-money,
   .invoice-table .record-row > [data-label] { min-height: 30px; padding: 2px 0; }
+  .quotation-detail-modal-layer { align-items: start; padding: max(10px, env(safe-area-inset-top)) 10px max(10px, env(safe-area-inset-bottom)); }
+  .quotation-detail-modal { display: flex; width: 100%; max-height: calc(100dvh - max(20px, env(safe-area-inset-top) + env(safe-area-inset-bottom))); flex-direction: column; border-radius: 17px; }
+  .quotation-detail-modal .modal-header { flex: 0 0 auto; padding: 15px; }
+  .quotation-detail-modal .modal-content { min-height: 0; max-height: none; flex: 1; padding: 15px; overflow-y: auto; }
+  .quotation-detail-modal .detail-stack { gap: 12px; }
+  .quotation-detail-modal .detail-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+  .quotation-detail-modal .detail-metrics > div { min-width: 0; padding: 10px 8px; }
+  .quotation-detail-modal .detail-metrics strong { overflow-wrap: anywhere; font-size: .78rem; }
+  .team-admin-grid { grid-template-columns: 1fr; }
+  .team-page-actions { display: grid; width: 100%; grid-template-columns: 1fr 1fr; }
+  .team-member-admin-list article { grid-template-columns: 36px minmax(0, 1fr) 38px; }
+  .team-member-admin-list article .custom-select { grid-column: 1 / -1; }
+  .team-member-admin-list article .danger-icon { grid-column: 3; grid-row: 1; }
+  .team-member-admin-list .manager-chip { grid-column: 1 / -1; }
+  .team-configuration-card, .team-members-card { padding: 12px; }
+  .environment-status { grid-template-columns: 38px 1fr; }
+  .environment-status > .status-pill { grid-column: 2; }
+  .portal-page { padding: max(12px, env(safe-area-inset-top)) 10px max(12px, env(safe-area-inset-bottom)); }
+  .portal-header { margin-bottom: 10px; padding: 0 4px; }
+  .portal-card { padding: 16px 14px; border-radius: 17px; }
+  .portal-hero { align-items: flex-start; }
+  .portal-hero h1 { font-size: 1.45rem; }
+  .portal-lines article { align-items: flex-start; }
+  .portal-lines article > strong { padding-top: 2px; }
+  .portal-actions { grid-template-columns: 1fr 1fr; }
+  .portal-actions .primary-action { grid-column: 1 / -1; }
   .settings-page {
     height: 100%;
     min-height: 0;

@@ -21,6 +21,7 @@ export function getConfig(env = process.env) {
     releaseId: env.RELEASE_ID ?? basename(realpathSync(process.cwd())),
     smtpUrl: env.SMTP_URL ?? null,
     mailFrom: env.MAIL_FROM ?? 'DealFlow360 <no-reply@dealflow360.athergrid.dev>',
+    settingsEncryptionKey: env.SETTINGS_ENCRYPTION_KEY ?? null,
     secureCookies: nodeEnv === 'production',
   };
 }

@@ -4,6 +4,7 @@ import nodemailer from 'nodemailer';
 import { hashPassword } from '../auth/password.js';
 import { hashSessionToken } from '../auth/session.js';
 import { createRateLimiter } from '../middleware/rate-limit.js';
+import { resolveMailSettings } from '../services/environment.js';
 
 const createSchema = z.object({
   email: z.string().trim().email().max(254),
@@ -34,10 +35,11 @@ export function registerInvitationRoutes(app, { store, config, auth }) {
     );
     const link = `${config.origin}/invite?token=${encodeURIComponent(token)}`;
     let delivered = false;
-    if (config.smtpUrl) {
+    const mail = await resolveMailSettings(store, config, current.user.workspaceId);
+    if (mail.smtpUrl) {
       try {
-        const transport = nodemailer.createTransport(config.smtpUrl);
-        await transport.sendMail({ from: config.mailFrom, to: parsed.data.email, subject: 'Join DealFlow360', text: `Your DealFlow360 invitation expires in 48 hours: ${link}` });
+        const transport = nodemailer.createTransport(mail.smtpUrl);
+        await transport.sendMail({ from: mail.mailFrom, to: parsed.data.email, subject: 'Join DealFlow360', text: `Your DealFlow360 invitation expires in 48 hours: ${link}` });
         delivered = true;
       } catch { delivered = false; }
     }

@@ -312,7 +312,7 @@ export default function App() {
     invoices: <InvoicesView />,
     health: <DealHealthView />,
     reports: <ReportsView />,
-    teams: <TeamsView />,
+    teams: <TeamsView user={user} />,
     settings: (
       <SettingsView
         user={user}

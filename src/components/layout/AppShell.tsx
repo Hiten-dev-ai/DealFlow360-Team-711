@@ -194,6 +194,16 @@ const WORKSPACE_SEARCH_ITEMS = [
     type: "Setting" as const,
   },
   {
+    key: "setting-environment",
+    view: "settings" as const,
+    settingsCategory: "environment" as const,
+    label: "Environment",
+    hint: "SMTP and server delivery settings",
+    icon: Server,
+    type: "Setting" as const,
+    adminOnly: true,
+  },
+  {
     key: "action-new-quotation",
     view: "quotations" as const,
     label: "New quotation",
@@ -224,7 +234,8 @@ type WorkspaceSearchItem = (typeof WORKSPACE_SEARCH_ITEMS)[number];
 function searchWorkspace(query: string, role: SessionUser["activeRole"]): WorkspaceSearchItem[] {
   const normalized = query.trim().toLowerCase();
   const allowedItems = WORKSPACE_SEARCH_ITEMS.filter((item) =>
-    isViewAvailable(item.view, role),
+    isViewAvailable(item.view, role)
+    && (!("adminOnly" in item) || !item.adminOnly || role === "admin"),
   );
   if (!normalized) return allowedItems;
   return allowedItems

@@ -75,6 +75,25 @@ const APPROVAL_STAGE_OPTIONS: SelectOption[] = [
   { value: "finance", label: "Finance / Ops" },
 ];
 
+const FULFILLMENT_STATUS_OPTIONS: SelectOption[] = [
+  { value: "all", label: "All statuses" },
+  { value: "ready", label: "Ready to allocate" },
+  { value: "planned", label: "Planned" },
+  { value: "reserved", label: "Reserved" },
+  { value: "picking", label: "Picking" },
+  { value: "partially_shipped", label: "Partially shipped" },
+  { value: "shipped", label: "Shipped" },
+  { value: "completed", label: "Completed" },
+  { value: "backorder", label: "Backorder" },
+];
+
+const ALERT_SEVERITY_OPTIONS: SelectOption[] = [
+  { value: "all", label: "All severity" },
+  { value: "high", label: "High" },
+  { value: "medium", label: "Medium" },
+  { value: "low", label: "Low" },
+];
+
 function PageHeader({
   kicker,
   title,
@@ -370,6 +389,7 @@ export function QuotationsView() {
         open={Boolean(selected)}
         title={text(selected?.quoteNumber)}
         eyebrow="Quotation detail"
+        className="quotation-detail-modal"
         onClose={() => {
           setSelectedId(null);
           setPortalLink("");
@@ -436,7 +456,7 @@ export function QuotationsView() {
             )}
             <ErrorText value={error} />
             <div className="modal-actions">
-              {canEdit && <button
+              {canEdit && text(selected.status) === "approved" && <button
                 type="button"
                 className="secondary-action"
                 disabled={connection !== "online"}
@@ -477,11 +497,13 @@ export function ApprovalsView() {
   );
   const decide = async (decision: "approve" | "reject") => {
     if (!selected) return;
+    const scrollTop = window.scrollY;
     try {
       await run(() =>
         mutate(`/api/approvals/${selected.id}/decision`, "POST", { decision }),
       );
       setSelectedId(null);
+      window.requestAnimationFrame(() => window.scrollTo({ top: scrollTop }));
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Decision failed.");
     }
@@ -600,11 +622,21 @@ export function ApprovalsView() {
 
 export function FulfillmentView() {
   const { data, connection, run } = useWorkspace();
+  const [query, setQuery] = useState("");
+  const [status, setStatus] = useState("all");
   const [error, setError] = useState("");
   const allocatable = data.quotes.filter(
     (quote) =>
       quote.status === "accepted" &&
       !data.fulfillment.some((order) => order.quoteId === quote.id),
+  );
+  const filteredAllocatable = allocatable.filter((quote) =>
+    `${text(quote.quoteNumber)} ${text(quote.customer)}`.toLowerCase().includes(query.toLowerCase())
+    && (status === "all" || status === "ready"),
+  );
+  const filteredFulfillment = data.fulfillment.filter((record) =>
+    `${text(record.quoteNumber)} ${text(record.customer)} ${(record.shipments as Row[] ?? []).map((shipment) => text(shipment.warehouse)).join(" ")}`.toLowerCase().includes(query.toLowerCase())
+    && (status === "all" || text(record.status) === status),
   );
   const allocate = async (quoteId: unknown) => {
     try {
@@ -623,8 +655,13 @@ export function FulfillmentView() {
         description="Review warehouse splits, shipment count, and stock risk."
       />
       <ErrorText value={error} />
+      <div className="data-toolbar standalone-toolbar">
+        <label className="toolbar-search"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search fulfillment" /></label>
+        <CustomSelect className="toolbar-custom-select" ariaLabel="Filter fulfillment by status" icon={<Filter size={15} />} options={FULFILLMENT_STATUS_OPTIONS} value={status} onChange={setStatus} />
+        <span className="result-count">{filteredAllocatable.length + filteredFulfillment.length} records</span>
+      </div>
       <section className="card-grid three-column">
-        {allocatable.map((quote) => (
+        {filteredAllocatable.map((quote) => (
           <article className="work-card" key={text(quote.id)}>
             <header>
               <span className="record-icon">
@@ -647,7 +684,7 @@ export function FulfillmentView() {
             </button>
           </article>
         ))}
-        {data.fulfillment.map((record) => {
+        {filteredFulfillment.map((record) => {
           const shipments = (record.shipments as Row[]) ?? [];
           return (
             <article className="work-card" key={text(record.id)}>
@@ -705,7 +742,7 @@ export function FulfillmentView() {
             </article>
           );
         })}
-        {!allocatable.length && !data.fulfillment.length && (
+        {!filteredAllocatable.length && !filteredFulfillment.length && (
           <EmptyState title="No fulfillment records" />
         )}
       </section>
@@ -978,8 +1015,14 @@ export function InvoicesView() {
 
 export function DealHealthView() {
   const { data } = useWorkspace();
+  const [query, setQuery] = useState("");
+  const [severity, setSeverity] = useState("all");
   const high = data.alerts.filter((alert) => alert.severity === "high").length;
   const score = Math.max(0, 100 - high * 8 - (data.alerts.length - high) * 3);
+  const filteredAlerts = useMemo(() => data.alerts.filter((alert) =>
+    `${text(alert.title)} ${text(alert.message)} ${text(alert.category)}`.toLowerCase().includes(query.toLowerCase())
+    && (severity === "all" || text(alert.severity) === severity),
+  ), [data.alerts, query, severity]);
   return (
     <div className="page-stack">
       <PageHeader
@@ -1008,14 +1051,19 @@ export function DealHealthView() {
           </span>
         </div>
       </section>
+      <div className="data-toolbar standalone-toolbar">
+        <label className="toolbar-search"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search deal signals" /></label>
+        <CustomSelect className="toolbar-custom-select" ariaLabel="Filter deal health by severity" icon={<Filter size={15} />} options={ALERT_SEVERITY_OPTIONS} value={severity} onChange={setSeverity} />
+        <span className="result-count">{filteredAlerts.length} signals</span>
+      </div>
       <section className="alert-list">
-        {data.alerts.length === 0 && (
+        {filteredAlerts.length === 0 && (
           <div className="success-empty">
             <CheckCircle2 size={24} />
             <strong>All signals resolved</strong>
           </div>
         )}
-        {data.alerts.map((alert) => (
+        {filteredAlerts.map((alert) => (
           <article key={text(alert.id)}>
             <span className={`alert-severity ${text(alert.severity)}`}>
               <AlertTriangle size={18} />

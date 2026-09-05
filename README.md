@@ -49,6 +49,7 @@ flowchart LR
 - Revision invalidation when commercial terms change
 - Short-lived, single-use customer magic links
 - Quote-scoped customer sessions for accepting, rejecting, commenting, or counteroffering
+- Responsive customer deal room with item totals and guarded response states
 - Audit records for staff and customer decisions
 
 ### Fulfillment and billing
@@ -64,6 +65,8 @@ flowchart LR
 ### Workspace experience
 
 - Role-scoped global search and reports
+- Searchable fulfillment, deal-health, and team workspaces
+- Team drill-down administration for names, managers, roles, invitations, and membership
 - Responsive desktop rail and mobile drawer navigation
 - Read/unread notifications with priority and DND preferences
 - API/database/sync health indicator
@@ -171,7 +174,8 @@ deploy/             Secret provisioning, isolated verification, release, rollbac
 | Area | Routes |
 | --- | --- |
 | Authentication | `/api/auth/login`, `/api/auth/session`, `/api/auth/logout` |
-| Access | `/api/invitations`, `/api/invitations/redeem`, `/api/admin/teams` |
+| Access | `/api/invitations`, `/api/invitations/redeem`, `/api/admin/teams`, `/api/admin/teams/:id/members/:userId` |
+| Environment | `/api/admin/environment` |
 | Workspace | `/api/bootstrap`, `/api/search`, `/api/preferences`, `/api/notifications` |
 | Quotations | `/api/quotes`, `/api/quotes/:id/lines`, `/api/quotes/:id/submit` |
 | Approvals | `/api/approvals/:id/decision` |
@@ -211,6 +215,7 @@ PORT=4173
 APP_ORIGIN=http://127.0.0.1:4173
 DATABASE_URL=postgresql://dealflow360:password@127.0.0.1:55432/dealflow360
 WORKSPACE_ID=00000000-0000-4000-8000-000000000711
+SETTINGS_ENCRYPTION_KEY=replace-with-a-long-random-secret
 DEMO_ADMIN_PASSWORD=replace-with-a-local-password
 DEMO_SALES_PASSWORD=replace-with-a-local-password
 DEMO_MANAGER_PASSWORD=replace-with-a-local-password
@@ -245,9 +250,10 @@ npm run dev
 | `DEMO_*_PASSWORD` | Seeding | Four demo-account passwords, supplied outside Git |
 | `SMTP_URL` | No | SMTP connection URL for invitation and portal email |
 | `MAIL_FROM` | No | Sender identity for email delivery |
+| `SETTINGS_ENCRYPTION_KEY` | Admin SMTP UI | Encrypts workspace SMTP credentials before database storage |
 | `SEED_DEMO` | Deployment | Runs the idempotent demo seed when set to `true` |
 
-When SMTP is absent, authorized staff receive a copy-link fallback for expiring invitations and customer portal links.
+Admins can configure SMTP in **Settings → Environment**. The password-bearing URL is encrypted at rest and never returned to the browser. `SMTP_URL` remains a server-level fallback. When SMTP is absent, authorized staff receive a copy-link fallback for expiring invitations and customer portal links.
 
 ## Offline and PWA behavior
 
