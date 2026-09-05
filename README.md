@@ -2,7 +2,9 @@
 
 DealFlow360 is a sales-operations workspace for governed quotations, approval routing, warehouse fulfillment, hybrid billing, and customer negotiation.
 
-This repository starts from a minimal application scaffold. Product capabilities will be added incrementally as the team implements and tests each workflow.
+The current foundation includes the authenticated application shell, responsive navigation, overview, quotation and pipeline entry points, personal settings, and the server-side security foundation. Product workflows will be added incrementally as the team implements and tests each milestone.
+
+The local UI uses two named dummy identities for smoke testing. Login shortcuts and credentials are intentionally not displayed on the sign-in screen.
 
 ## Development
 

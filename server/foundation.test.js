@@ -19,7 +19,7 @@ async function createTestApp() {
   await store.createUser({
     id: randomUUID(),
     email: 'owner@dealflow.test',
-    fullName: 'Team Owner',
+    fullName: 'Hiten',
     passwordHash: await hashPassword('correct horse battery staple'),
     roles: ['owner'],
   });
