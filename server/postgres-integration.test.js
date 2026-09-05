@@ -38,6 +38,7 @@ describe.runIf(Boolean(databaseUrl))('PostgreSQL end-to-end flow', () => {
     expect(initial.quotes.length).toBeGreaterThan(20);
     expect(initial.customers.length).toBeGreaterThanOrEqual(24);
     expect(initial.catalog.length).toBeGreaterThanOrEqual(16);
+    expect(new Set(initial.customers.map((customer) => customer.tier))).toEqual(new Set(['Bronze', 'Silver', 'Gold']));
     expect(initial.fulfillment).toEqual([]);
     expect(initial.subscriptions).toEqual([]);
     expect(initial.invoices).toEqual([]);
@@ -47,10 +48,10 @@ describe.runIf(Boolean(databaseUrl))('PostgreSQL end-to-end flow', () => {
 
     const environmentDenied = await request(app, '/api/admin/environment', { auth: sales });
     expect(environmentDenied.status).toBe(403);
-    const environmentSaved = await request(app, '/api/admin/environment', { method: 'PATCH', auth: admin, body: { smtpUrl: 'smtp://user:secret@localhost:2525', mailFrom: 'DealFlow360 <test@example.com>' } });
+    const environmentSaved = await request(app, '/api/admin/environment', { method: 'PATCH', auth: admin, body: { smtpHost: 'localhost', smtpPort: 2525, smtpUsername: 'user', smtpPassword: 'secret', smtpSecure: false, mailFrom: 'DealFlow360 <test@example.com>' } });
     expect(environmentSaved.status).toBe(200);
     const environmentData = (await environmentSaved.json()).data;
-    expect(environmentData).toMatchObject({ smtpConfigured: true, smtpHost: 'localhost', source: 'workspace' });
+    expect(environmentData).toMatchObject({ smtpConfigured: true, smtpHost: 'localhost', smtpPort: 2525, smtpUsername: 'user', smtpSecure: false, smtpHasPassword: true, source: 'workspace' });
     expect(JSON.stringify(environmentData)).not.toContain('secret');
     expect((await request(app, '/api/admin/environment', { method: 'PATCH', auth: admin, body: { clearSmtp: true } })).status).toBe(200);
 
@@ -125,6 +126,8 @@ describe.runIf(Boolean(databaseUrl))('PostgreSQL end-to-end flow', () => {
     const scopedPortalQuote = await request(app, '/api/portal/quote', { auth: portal });
     expect(scopedPortalQuote.status).toBe(200);
     expect((await scopedPortalQuote.json()).data.id).toBe(quote.id);
+    const dualSessionPortalResponse = await app.request('/api/portal/quote/respond', { method: 'POST', headers: { Origin: origin, Cookie: `${admin.cookie}; ${portal.cookie}`, 'X-CSRF-Token': portal.csrfToken, 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'comment', message: 'Portal session remains isolated.' }) });
+    expect(dualSessionPortalResponse.status).toBe(200);
     expect((await request(app, '/api/portal/quote/respond', { method: 'POST', auth: portal, body: { action: 'accept' } })).status).toBe(200);
 
     const allocation = await request(app, `/api/fulfillment/quotes/${quote.id}/allocate`, { method: 'POST', auth: finance });
@@ -133,6 +136,7 @@ describe.runIf(Boolean(databaseUrl))('PostgreSQL end-to-end flow', () => {
     expect(completed.fulfillment.length).toBeGreaterThan(0);
     expect(completed.subscriptions.length).toBeGreaterThan(0);
     expect(completed.invoices.length).toBeGreaterThan(0);
+    expect(completed.payments.length).toBeGreaterThan(0);
     const subscription = completed.subscriptions.find((record) => record.quoteId === quote.id && record.status === 'active');
     expect(subscription).toBeTruthy();
     const paused = await request(app, `/api/subscriptions/${subscription.id}`, { method: 'PATCH', auth: finance, body: { status: 'paused', expectedVersion: Number(subscription.version) } });

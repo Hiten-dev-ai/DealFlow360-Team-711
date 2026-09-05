@@ -16,6 +16,7 @@ import { CustomSelect, type SelectOption } from "../components/ui/CustomSelect";
 import { Modal } from "../components/ui/Modal";
 import { mutate, type Role, type SessionUser } from "../lib/api";
 import { useWorkspace } from "../lib/workspace";
+import { showToast } from "../components/ui/ToastViewport";
 
 type Row = Record<string, unknown>;
 
@@ -55,9 +56,12 @@ export function TeamsView({ user }: { user: SessionUser }) {
     setError("");
     try {
       await run(operation);
+      showToast("Team changes saved.", "success");
       return true;
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : fallback);
+      const message = caught instanceof Error ? caught.message : fallback;
+      setError(message);
+      showToast(message, "error");
       return false;
     }
   };
@@ -81,8 +85,11 @@ export function TeamsView({ user }: { user: SessionUser }) {
         teamId: form.get("teamId") || null,
       }));
       setResult(response.data.delivered ? "Invitation sent." : response.data.link);
+      showToast(response.data.delivered ? "Invitation sent." : "Invitation link created.", "success");
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Could not invite user.");
+      const message = caught instanceof Error ? caught.message : "Could not invite user.";
+      setError(message);
+      showToast(message, "error");
     }
   };
 

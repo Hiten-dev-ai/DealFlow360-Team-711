@@ -9,6 +9,7 @@ import {
   X,
 } from "lucide-react";
 import { apiFetch, setCsrf } from "../lib/api";
+import { showToast } from "../components/ui/ToastViewport";
 
 type PortalLine = {
   id: string;
@@ -73,8 +74,11 @@ export function CustomerPortal() {
       });
       setMessage("");
       await load();
+      showToast(action === "accept" ? "Quotation accepted." : action === "reject" ? "Quotation declined." : "Message sent.", "success");
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Could not send response.");
+      const nextError = caught instanceof Error ? caught.message : "Could not send response.";
+      setError(nextError);
+      showToast(nextError, "error");
     } finally {
       setBusy(false);
     }
@@ -98,8 +102,11 @@ export function CustomerPortal() {
       });
       setMessage("");
       await load();
+      showToast("Change request sent.", "success");
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Could not submit counteroffer.");
+      const nextError = caught instanceof Error ? caught.message : "Could not submit change request.";
+      setError(nextError);
+      showToast(nextError, "error");
     } finally {
       setBusy(false);
     }
@@ -133,11 +140,11 @@ export function CustomerPortal() {
             <div className="portal-total"><span>Total</span><strong>{money(quote.totalMinor)}</strong></div>
             {canRespond ? (
               <form className="modal-form portal-response" onSubmit={counter}>
-                <label><span>Message</span><textarea value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Add a note for the sales team" /></label>
-                <details className="portal-counter"><summary>Request line changes <ChevronDown size={16} /></summary><div>{quote.lines.map((line) => <div className="form-columns" key={line.id}><label><span>{line.product} quantity</span><input name={`quantity-${line.id}`} type="number" min="1" defaultValue={line.quantity} /></label><label><span>Discount %</span><input name={`discount-${line.id}`} type="number" min="0" max="100" step="0.1" defaultValue={line.discountBps / 100} /></label></div>)}</div></details>
+                <label><span>Note for the sales team</span><textarea value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Questions or comments (optional)" /></label>
+                <button type="button" className="action-text-button portal-message-action" disabled={busy || !message.trim()} onClick={() => void respond("comment")}><MessageSquare size={15} /> Send note</button>
+                <details className="portal-counter"><summary>Suggest quantity or discount changes <ChevronDown size={16} /></summary><div>{quote.lines.map((line) => <div className="form-columns" key={line.id}><label><span>{line.product} quantity</span><input name={`quantity-${line.id}`} type="number" min="1" defaultValue={line.quantity} /></label><label><span>Requested discount %</span><input name={`discount-${line.id}`} type="number" min="0" max="100" step="0.1" defaultValue={line.discountBps / 100} /></label></div>)}<button type="submit" className="secondary-action portal-change-submit" disabled={busy}><Send size={16} /> Send change request</button></div></details>
                 {error && <p className="login-error">{error}</p>}
-                <div className="portal-actions"><button type="button" className="danger-action" disabled={busy} onClick={() => void respond("reject")}><X size={16} /> Reject</button><button type="submit" className="secondary-action" disabled={busy}><Send size={16} /> Counter</button><button type="button" className="primary-action" disabled={busy} onClick={() => void respond("accept")}><Check size={16} /> Accept</button></div>
-                <button type="button" className="action-text-button" disabled={busy || !message.trim()} onClick={() => void respond("comment")}><MessageSquare size={15} /> Send comment only</button>
+                <div className="portal-actions"><button type="button" className="danger-action" disabled={busy} onClick={() => void respond("reject")}><X size={16} /> Decline</button><button type="button" className="primary-action" disabled={busy} onClick={() => void respond("accept")}><Check size={16} /> Accept quotation</button></div>
               </form>
             ) : (
               <div className="portal-outcome"><Check size={18} /><span><strong>{quote.status === "accepted" ? "Quotation accepted" : quote.status === "rejected" ? "Quotation declined" : "Sales review in progress"}</strong><small>No further action is needed here.</small></span></div>

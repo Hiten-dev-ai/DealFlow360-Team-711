@@ -21,23 +21,23 @@ const extraProducts = [
 ];
 
 const extraCustomers = [
-  ['Orion Mobility', 'buying@orion.example', 1, 0],
+  ['Orion Mobility', 'buying@orion.example', 2, 0],
   ['BluePeak Logistics', 'sourcing@bluepeak.example', 0, 4200000],
   ['Meridian Foods', 'procurement@meridian.example', 0, 0],
   ['Vertex Manufacturing', 'commercial@vertex.example', 1, 0],
   ['Cedar Health Systems', 'operations@cedarhealth.example', 0, 1800000],
   ['Kitewave Telecom', 'enterprise@kitewave.example', 0, 0],
-  ['Nimbus Energy', 'supply@nimbusenergy.example', 1, 0],
+  ['Nimbus Energy', 'supply@nimbusenergy.example', 2, 0],
   ['Atlas Consumer Goods', 'purchasing@atlasgoods.example', 0, 6400000],
   ['Silverline Pharma', 'digital@silverline.example', 1, 0],
   ['RapidRoute Couriers', 'technology@rapidroute.example', 0, 900000],
   ['Evergreen Textiles', 'systems@evergreen.example', 0, 0],
-  ['NovaHome Retail', 'growth@novahome.example', 1, 0],
+  ['NovaHome Retail', 'growth@novahome.example', 2, 0],
   ['Pioneer Auto Parts', 'procurement@pioneerauto.example', 0, 3200000],
   ['Suncrest Hospitality', 'it@suncrest.example', 0, 0],
   ['UrbanBasket Commerce', 'platform@urbanbasket.example', 1, 0],
   ['Ironwood Engineering', 'salesops@ironwood.example', 0, 0],
-  ['CoralPay Services', 'partnerships@coralpay.example', 1, 0],
+  ['CoralPay Services', 'partnerships@coralpay.example', 2, 0],
   ['Greenfield Agritech', 'business@greenfield.example', 0, 1100000],
   ['Summit Office Supply', 'orders@summitoffice.example', 0, 0],
   ['Lighthouse Education', 'admin@lighthouseedu.example', 1, 0],
@@ -109,13 +109,13 @@ export async function seedSmokeData(client, { workspaceId, users, team, tiers, c
       { product: firstProduct, quantity: 1 + (index % 4), discountBps },
       { product: secondProduct, quantity: 1 + (index % 3), discountBps: Math.max(0, discountBps - 300) },
     ];
-    const customerTierIndex = customer[1] === tiers[1][0] ? 1 : 0;
+    const customerTierIndex = Math.max(0, tiers.findIndex((tier) => customer[1] === tier[0]));
     const calculationLines = rawLines.map(({ product, quantity, discountBps: lineDiscount }) => {
       const categoryIndex = categories.findIndex((category) => category[0] === product[1]);
-      const ceilingBps = [[1000, 800, 500], [1500, 1200, 1000]][customerTierIndex][categoryIndex];
+      const ceilingBps = [[700, 500, 300], [1100, 900, 700], [1500, 1200, 1000]][customerTierIndex][categoryIndex];
       return { quantity, discountBps: lineDiscount, unitPriceMinor: product[6], unitCostMinor: product[7], ceilingBps };
     });
-    const overdueRisk = customerTierIndex === 1 ? 5 : 20;
+    const overdueRisk = tiers[customerTierIndex][2];
     const calculation = calculateQuote(calculationLines, { overdueRisk }, settings);
     const status = statuses[index % statuses.length];
     const revision = ['negotiation', 'accepted'].includes(status) ? 2 : 1;

@@ -24,6 +24,7 @@ import {
 import { Modal } from "../components/ui/Modal";
 import { CustomSelect, type SelectOption } from "../components/ui/CustomSelect";
 import { downloadReport, mutate } from "../lib/api";
+import { showToast } from "../components/ui/ToastViewport";
 import { statusTone } from "../lib/demo-data";
 import { useWorkspace } from "../lib/workspace";
 
@@ -152,7 +153,7 @@ export function QuotationsView() {
     () =>
       quotations.filter(
         (quote) =>
-          `${text(quote.quoteNumber)} ${text(quote.customer)} ${text(quote.owner)}`
+          `${text(quote.quoteNumber)} ${text(quote.customer)} ${text(quote.owner)} ${text(quote.tier)}`
             .toLowerCase()
             .includes(query.toLowerCase()) &&
           (status === "all" || text(quote.status) === status),
@@ -289,7 +290,7 @@ export function QuotationsView() {
               <span className="record-primary">
                 <strong>{text(quote.customer)}</strong>
                 <small>
-                  {text(quote.quoteNumber)} ·{" "}
+                  {text(quote.quoteNumber)} · {text(quote.tier)} ·{" "}
                   {new Date(text(quote.updatedAt)).toLocaleString()}
                 </small>
               </span>
@@ -502,10 +503,13 @@ export function ApprovalsView() {
       await run(() =>
         mutate(`/api/approvals/${selected.id}/decision`, "POST", { decision }),
       );
+      showToast(decision === "approve" ? "Quotation approved." : "Quotation rejected.", decision === "approve" ? "success" : "warning");
       setSelectedId(null);
       window.requestAnimationFrame(() => window.scrollTo({ top: scrollTop }));
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Decision failed.");
+      const message = caught instanceof Error ? caught.message : "Decision failed.";
+      setError(message);
+      showToast(message, "error");
     }
   };
   return (
@@ -643,8 +647,11 @@ export function FulfillmentView() {
       await run(() =>
         mutate(`/api/fulfillment/quotes/${quoteId}/allocate`, "POST"),
       );
+      showToast("Inventory allocated.", "success");
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Allocation failed.");
+      const message = caught instanceof Error ? caught.message : "Allocation failed.";
+      setError(message);
+      showToast(message, "error");
     }
   };
   return (
@@ -769,8 +776,11 @@ export function SubscriptionsView() {
           expectedVersion: amount(item.version),
         }),
       );
+      showToast(item.status === "active" ? "Subscription paused." : "Subscription resumed.", item.status === "active" ? "warning" : "success");
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Update failed.");
+      const message = caught instanceof Error ? caught.message : "Update failed.";
+      setError(message);
+      showToast(message, "error");
     }
   };
   return (
@@ -853,6 +863,8 @@ export function SubscriptionsView() {
 export function InvoicesView() {
   const { data, connection, run } = useWorkspace();
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [ledgerOpen, setLedgerOpen] = useState(false);
+  const [ledgerQuery, setLedgerQuery] = useState("");
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("all");
   const [error, setError] = useState("");
@@ -863,6 +875,9 @@ export function InvoicesView() {
       && (status === "all" || text(item.status) === status)),
     [data.invoices, query, status],
   );
+  const ledgerEntries = useMemo(() => data.payments.filter((item) =>
+    `${text(item.invoiceNumber)} ${text(item.customer)} ${text(item.reference)} ${text(item.recordedBy)}`.toLowerCase().includes(ledgerQuery.toLowerCase())),
+  [data.payments, ledgerQuery]);
   const pay = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!selected) return;
@@ -887,9 +902,12 @@ export function InvoicesView() {
           crypto.randomUUID(),
         ),
       );
+      showToast("Payment recorded.", "success");
       setSelectedId(null);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Payment failed.");
+      const message = caught instanceof Error ? caught.message : "Payment failed.";
+      setError(message);
+      showToast(message, "error");
     }
   };
   return (
@@ -899,9 +917,9 @@ export function InvoicesView() {
         title="Invoices"
         description="Track balances and record customer payments."
         action={
-          <span className="secondary-action">
+          <button type="button" className="secondary-action" onClick={() => setLedgerOpen(true)}>
             <ReceiptIndianRupee size={17} /> Internal ledger
-          </span>
+          </button>
         }
       />
       <section className="data-panel">
@@ -958,6 +976,27 @@ export function InvoicesView() {
           {!filtered.length && <EmptyState title="No invoices" />}
         </div>
       </section>
+      <Modal
+        open={ledgerOpen}
+        title="Payment ledger"
+        eyebrow="Internal ledger"
+        className="wide ledger-modal"
+        onClose={() => { setLedgerOpen(false); setLedgerQuery(""); }}
+      >
+        <div className="ledger-summary">
+          <span><small>Collected</small><strong>{formatMoney(data.payments.reduce((sum, item) => sum + amount(item.amountMinor), 0))}</strong></span>
+          <span><small>Entries</small><strong>{data.payments.length}</strong></span>
+        </div>
+        <label className="toolbar-search ledger-search"><Search size={16} /><input value={ledgerQuery} onChange={(event) => setLedgerQuery(event.target.value)} placeholder="Search reference, invoice or customer" /></label>
+        <div className="ledger-list">
+          {ledgerEntries.map((item) => <article key={text(item.id)}>
+            <span className="record-icon"><ReceiptIndianRupee size={16} /></span>
+            <span><strong>{text(item.customer)}</strong><small>INV-{text(item.invoiceNumber).padStart(4, "0")} · {text(item.reference)}</small></span>
+            <span><strong>{formatMoney(item.amountMinor)}</strong><small>{new Date(text(item.receivedAt)).toLocaleString()}</small></span>
+          </article>)}
+          {!ledgerEntries.length && <EmptyState title="No ledger entries" />}
+        </div>
+      </Modal>
       <Modal
         open={Boolean(selected)}
         title="Record payment"

@@ -15,6 +15,7 @@ export interface WorkspaceData {
   fulfillment: Array<Record<string, unknown>>;
   subscriptions: Array<Record<string, unknown>>;
   invoices: Array<Record<string, unknown>>;
+  payments: Array<Record<string, unknown>>;
   alerts: Array<Record<string, unknown>>;
   notifications: Array<Record<string, unknown>>;
   teams: Array<Record<string, unknown>>;

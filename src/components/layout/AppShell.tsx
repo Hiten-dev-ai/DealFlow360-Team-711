@@ -26,6 +26,7 @@ import {
   Moon,
   PackageCheck,
   Palette,
+  RefreshCw,
   Search,
   Server,
   Settings,
@@ -779,14 +780,14 @@ export function AppShell({
                 onClick={() => setServerOpen((open) => !open)}
                 aria-label={`Server ${connectionLabel}`}
               >
-                <span className={`server-status-dot ${connection}`} />
+                {connection === "syncing" ? <RefreshCw className="server-sync-icon" size={13} /> : <span className={`server-status-dot ${connection}`} />}
                 <Server size={19} />
               </button>
               {serverOpen && (
                 <div className="server-status-panel">
                   <header>
-                    <strong>{connectionLabel}</strong>
-                    <span className={`server-status-dot ${connection}`} />
+                    <strong>{connection === "syncing" ? "Updating" : connectionLabel}</strong>
+                    {connection === "syncing" ? <RefreshCw className="server-sync-icon" size={14} /> : <span className={`server-status-dot ${connection}`} />}
                   </header>
                   <dl>
                     <div>
@@ -849,13 +850,11 @@ export function AppShell({
             </button>
           </div>
         </header>
-        {connection !== "online" && (
+        {(connection === "offline" || connection === "degraded") && (
           <div className={`connection-banner ${connection}`}>
             {connection === "offline"
               ? "Offline — viewing saved data"
-              : connection === "syncing"
-                ? "Syncing workspace…"
-                : "Server connection is degraded"}
+              : "Server connection is degraded"}
           </div>
         )}
         <main

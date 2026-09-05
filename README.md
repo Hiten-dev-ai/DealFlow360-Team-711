@@ -60,7 +60,7 @@ flowchart LR
 - Separation of one-time invoice lines from recurring subscriptions
 - Daily proration for the first recurring billing period
 - Due, partially paid, paid, and overdue invoice states
-- Idempotent payment recording with internal references
+- Searchable internal payment ledger with idempotent payment recording and references
 
 ### Workspace experience
 
@@ -93,7 +93,7 @@ Customer portal sessions are separate from internal accounts and are restricted 
 | --- | ---: |
 | Internal users | 4 |
 | Sales teams | 1 |
-| Customer tiers | 2 |
+| Customer tiers | 3 — Bronze, Silver, and Gold |
 | Customers | 24 |
 | Product categories | 3 |
 | Products | 16 |
@@ -253,7 +253,7 @@ npm run dev
 | `SETTINGS_ENCRYPTION_KEY` | Admin SMTP UI | Encrypts workspace SMTP credentials before database storage |
 | `SEED_DEMO` | Deployment | Runs the idempotent demo seed when set to `true` |
 
-Admins can configure SMTP in **Settings → Environment**. The password-bearing URL is encrypted at rest and never returned to the browser. `SMTP_URL` remains a server-level fallback. When SMTP is absent, authorized staff receive a copy-link fallback for expiring invitations and customer portal links.
+Admins can configure SMTP host, port, username, password, TLS mode, and sender in **Settings → Environment**. The assembled password-bearing connection URL is encrypted at rest and the password is never returned to the browser. `SMTP_URL` remains a server-level fallback. When SMTP is absent, authorized staff receive a copy-link fallback for expiring invitations and customer portal links.
 
 ## Offline and PWA behavior
 

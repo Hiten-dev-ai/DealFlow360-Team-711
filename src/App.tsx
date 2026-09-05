@@ -31,6 +31,7 @@ import { LoginPage } from "./views/LoginPage";
 import { OverviewView } from "./views/OverviewView";
 import { PwaWelcome, shouldShowPwaWelcome } from "./views/PwaWelcome";
 import { CustomerPortal } from "./views/CustomerPortal";
+import { ToastViewport } from "./components/ui/ToastViewport";
 import { InviteRedeem } from "./views/InviteRedeem";
 import { TeamsView } from "./views/TeamsView";
 import {
@@ -58,6 +59,7 @@ const EMPTY_WORKSPACE: WorkspaceData = {
   fulfillment: [],
   subscriptions: [],
   invoices: [],
+  payments: [],
   alerts: [],
   notifications: [],
   teams: [],
@@ -82,7 +84,7 @@ function storedUser() {
 }
 
 export default function App() {
-  if (location.pathname === "/portal") return <CustomerPortal />;
+  if (location.pathname === "/portal") return <><CustomerPortal /><ToastViewport /></>;
   if (location.pathname === "/invite") return <InviteRedeem />;
   const [showPwaWelcome, setShowPwaWelcome] = useState(shouldShowPwaWelcome);
   const [booting, setBooting] = useState(true);
@@ -348,6 +350,7 @@ export default function App() {
       >
         {views[activeView]}
       </AppShell>
+      <ToastViewport />
     </WorkspaceProvider>
   );
 }

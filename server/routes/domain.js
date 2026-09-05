@@ -10,7 +10,9 @@ import { csrfTokenForSession } from "../auth/csrf.js";
 import { readCookie, sessionCookie } from "../http/cookies.js";
 import {
   encryptSetting,
+  buildSmtpUrl,
   resolveMailSettings,
+  smtpConnectionDetails,
   smtpHost,
 } from "../services/environment.js";
 
@@ -130,7 +132,7 @@ async function listQuotes(store, auth) {
             q.discount_minor AS "discountMinor", q.total_minor AS "totalMinor", q.cost_minor AS "costMinor",
             q.margin_bps AS "marginBps", q.risk_score AS "riskScore", q.approval_route AS "approvalRoute",
             q.version, q.valid_until AS "validUntil", q.updated_at AS "updatedAt",
-            c.id AS "customerId", c.name AS customer, u.full_name AS owner, q.owner_user_id AS "ownerUserId", q.team_id AS "teamId",
+            c.id AS "customerId", c.name AS customer, t.name AS tier, u.full_name AS owner, q.owner_user_id AS "ownerUserId", q.team_id AS "teamId",
             COALESCE((SELECT json_agg(json_build_object('id', l.id, 'productId', p.id, 'product', p.name, 'sku', p.sku,
               'quantity', l.quantity, 'unitPriceMinor', l.unit_price_minor, 'discountBps', l.discount_bps,
               'billingType', l.billing_type, 'cadence', l.cadence) ORDER BY p.name)
@@ -141,7 +143,7 @@ async function listQuotes(store, auth) {
               JOIN products suggested ON suggested.id=ur.suggested_product_id
               WHERE ur.workspace_id=q.workspace_id AND ur.active=true AND source_line.quantity>=ur.min_quantity
                 AND NOT EXISTS(SELECT 1 FROM quote_lines existing WHERE existing.quote_id=q.id AND existing.product_id=suggested.id)), '[]') AS suggestions
-       FROM quotes q JOIN customers c ON c.id = q.customer_id JOIN users u ON u.id = q.owner_user_id
+       FROM quotes q JOIN customers c ON c.id = q.customer_id LEFT JOIN customer_tiers t ON t.id=c.tier_id JOIN users u ON u.id = q.owner_user_id
       WHERE q.workspace_id = $1${scope.sql} ORDER BY q.updated_at DESC LIMIT 200`,
     [auth.user.workspaceId, ...scope.params],
   );
@@ -312,6 +314,7 @@ export function registerDomainRoutes(app, { store, config, auth }) {
       fulfillment,
       subscriptions,
       invoices,
+      payments,
       alerts,
       notifications,
       teams,
@@ -339,6 +342,13 @@ export function registerDomainRoutes(app, { store, config, auth }) {
       ) : Promise.resolve({ rows: [] }),
       canReadOperations ? store.query(
         `SELECT i.id,i.quote_id AS "quoteId",i.subscription_id AS "subscriptionId",i.invoice_number AS "invoiceNumber",i.status,i.total_minor AS "totalMinor",i.paid_minor AS "paidMinor",i.due_on AS "dueOn",i.version,c.name AS customer FROM invoices i JOIN customers c ON c.id=i.customer_id WHERE i.workspace_id=$1 ORDER BY i.created_at DESC`,
+        [current.user.workspaceId],
+      ) : Promise.resolve({ rows: [] }),
+      canReadOperations ? store.query(
+        `SELECT p.id,p.invoice_id AS "invoiceId",p.amount_minor AS "amountMinor",p.reference,p.received_at AS "receivedAt",
+          i.invoice_number AS "invoiceNumber",c.name AS customer,COALESCE(u.full_name,'System') AS "recordedBy"
+         FROM payments p JOIN invoices i ON i.id=p.invoice_id JOIN customers c ON c.id=i.customer_id
+         LEFT JOIN users u ON u.id=p.recorded_by WHERE i.workspace_id=$1 ORDER BY p.received_at DESC`,
         [current.user.workspaceId],
       ) : Promise.resolve({ rows: [] }),
       store.query(
@@ -377,6 +387,7 @@ export function registerDomainRoutes(app, { store, config, auth }) {
         fulfillment: fulfillment.rows,
         subscriptions: subscriptions.rows,
         invoices: invoices.rows,
+        payments: payments.rows,
         alerts: alerts.rows,
         notifications: notifications.rows,
         teams: teams.rows,
@@ -1713,9 +1724,14 @@ export function registerDomainRoutes(app, { store, config, auth }) {
     if (unavailable) return unavailable;
     const current = c.get("auth");
     const mail = await resolveMailSettings(store, config, current.user.workspaceId);
+    const smtp = smtpConnectionDetails(mail.smtpUrl);
     return c.json({ data: {
       smtpConfigured: Boolean(mail.smtpUrl),
       smtpHost: smtpHost(mail.smtpUrl),
+      smtpPort: smtp.port,
+      smtpUsername: smtp.username,
+      smtpSecure: smtp.secure,
+      smtpHasPassword: smtp.hasPassword,
       source: mail.source,
       mailFrom: mail.mailFrom,
       version: mail.version ?? 0,
@@ -1729,14 +1745,33 @@ export function registerDomainRoutes(app, { store, config, auth }) {
     if (unavailable) return unavailable;
     const parsed = z.object({
       smtpUrl: z.string().trim().max(1000).refine((value) => value === "" || /^smtps?:\/\//i.test(value), "Use an smtp:// or smtps:// URL.").optional(),
+      smtpHost: z.string().trim().min(1).max(253).regex(/^[a-z0-9.-]+$/i).optional(),
+      smtpPort: z.number().int().min(1).max(65535).optional(),
+      smtpUsername: z.string().trim().max(254).optional(),
+      smtpPassword: z.string().max(512).optional(),
+      smtpSecure: z.boolean().optional(),
       mailFrom: z.string().trim().min(3).max(254).optional(),
       clearSmtp: z.boolean().optional(),
-    }).refine((value) => value.smtpUrl !== undefined || value.mailFrom !== undefined || value.clearSmtp).safeParse(await c.req.json().catch(() => null));
+    }).refine((value) => value.smtpUrl !== undefined || value.smtpHost !== undefined || value.mailFrom !== undefined || value.clearSmtp).safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) return c.json({ error: "Enter valid environment settings.", code: "INVALID_INPUT" }, 400);
     const current = c.get("auth");
-    const changeSmtp = parsed.data.smtpUrl !== undefined || parsed.data.clearSmtp === true;
-    if (parsed.data.smtpUrl && !config.settingsEncryptionKey) return c.json({ error: "Server-side encryption is not configured.", code: "ENCRYPTION_UNAVAILABLE" }, 503);
-    const encrypted = parsed.data.smtpUrl ? encryptSetting(parsed.data.smtpUrl, config.settingsEncryptionKey) : null;
+    const currentMail = await resolveMailSettings(store, config, current.user.workspaceId);
+    const currentSmtp = smtpConnectionDetails(currentMail.smtpUrl);
+    const changeSmtp = parsed.data.smtpUrl !== undefined || parsed.data.smtpHost !== undefined || parsed.data.clearSmtp === true;
+    let nextSmtpUrl = parsed.data.smtpUrl || null;
+    if (parsed.data.smtpHost !== undefined) {
+      const password = parsed.data.smtpPassword || (currentSmtp.hasPassword && currentMail.smtpUrl ? decodeURIComponent(new URL(currentMail.smtpUrl).password) : "");
+      if (!password) return c.json({ error: "Enter the SMTP password.", code: "SMTP_PASSWORD_REQUIRED" }, 400);
+      nextSmtpUrl = buildSmtpUrl({
+        host: parsed.data.smtpHost,
+        port: parsed.data.smtpPort ?? currentSmtp.port,
+        username: parsed.data.smtpUsername ?? currentSmtp.username,
+        password,
+        secure: parsed.data.smtpSecure ?? currentSmtp.secure,
+      });
+    }
+    if (nextSmtpUrl && !config.settingsEncryptionKey) return c.json({ error: "Server-side encryption is not configured.", code: "ENCRYPTION_UNAVAILABLE" }, 503);
+    const encrypted = nextSmtpUrl ? encryptSetting(nextSmtpUrl, config.settingsEncryptionKey) : null;
     await store.query(
       `INSERT INTO workspace_environment_settings(workspace_id,smtp_url_encrypted,mail_from,updated_by)
        VALUES($1,$2,$3,$4)
@@ -1746,9 +1781,10 @@ export function registerDomainRoutes(app, { store, config, auth }) {
          version=workspace_environment_settings.version+1,updated_by=$4,updated_at=now()`,
       [current.user.workspaceId, encrypted, parsed.data.mailFrom ?? null, current.user.id, changeSmtp],
     );
-    await store.writeAudit({ userId: current.user.id, workspaceId: current.user.workspaceId, action: "environment.smtp_updated", metadata: { smtpChanged: changeSmtp, smtpConfigured: Boolean(parsed.data.smtpUrl), mailFromChanged: parsed.data.mailFrom !== undefined } });
+    await store.writeAudit({ userId: current.user.id, workspaceId: current.user.workspaceId, action: "environment.smtp_updated", metadata: { smtpChanged: changeSmtp, smtpConfigured: Boolean(nextSmtpUrl), mailFromChanged: parsed.data.mailFrom !== undefined } });
     const mail = await resolveMailSettings(store, config, current.user.workspaceId);
-    return c.json({ data: { smtpConfigured: Boolean(mail.smtpUrl), smtpHost: smtpHost(mail.smtpUrl), source: mail.source, mailFrom: mail.mailFrom, version: mail.version, updatedAt: mail.updatedAt, encryptionReady: Boolean(config.settingsEncryptionKey) } });
+    const smtp = smtpConnectionDetails(mail.smtpUrl);
+    return c.json({ data: { smtpConfigured: Boolean(mail.smtpUrl), smtpHost: smtp.host, smtpPort: smtp.port, smtpUsername: smtp.username, smtpSecure: smtp.secure, smtpHasPassword: smtp.hasPassword, source: mail.source, mailFrom: mail.mailFrom, version: mail.version, updatedAt: mail.updatedAt, encryptionReady: Boolean(config.settingsEncryptionKey) } });
   });
 
   const renderReport = async (c, format) => {

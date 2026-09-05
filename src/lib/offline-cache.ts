@@ -14,7 +14,9 @@ export async function saveWorkspaceCache(user: SessionUser, value: BootstrapResp
 }
 
 export async function loadWorkspaceCache(user: SessionUser) {
-  return (await db).get('workspaces', key(user)) as Promise<(BootstrapResponse & { cachedFor: string }) | undefined>;
+  const cached = await (await db).get('workspaces', key(user)) as (BootstrapResponse & { cachedFor: string }) | undefined;
+  if (cached?.data && !Array.isArray(cached.data.payments)) cached.data.payments = [];
+  return cached;
 }
 
 export async function clearWorkspaceCache(user: SessionUser) {

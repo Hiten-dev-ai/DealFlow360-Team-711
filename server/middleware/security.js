@@ -14,7 +14,9 @@ export function applySecurityHeaders(app, config) {
         return c.json({ error: 'Cross-origin request rejected.', code: 'CSRF_REJECTED' }, 403);
       }
       const isPublicAuth = ['/api/auth/login', '/api/invitations/redeem', '/api/portal/redeem'].includes(c.req.path);
-      const protectedToken = readCookie(c.req, config.sessionCookieName) ?? readCookie(c.req, config.portalCookieName);
+      const protectedToken = c.req.path.startsWith('/api/portal/')
+        ? readCookie(c.req, config.portalCookieName)
+        : readCookie(c.req, config.sessionCookieName);
       if (!isPublicAuth && protectedToken && !csrfMatches(protectedToken, c.req.header('X-CSRF-Token'))) {
         return c.json({ error: 'Security token is missing or invalid.', code: 'CSRF_REJECTED' }, 403);
       }

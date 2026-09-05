@@ -66,10 +66,30 @@ export async function resolveMailSettings(store, config, workspaceId) {
 }
 
 export function smtpHost(smtpUrl) {
-  if (!smtpUrl) return null;
+  return smtpConnectionDetails(smtpUrl).host;
+}
+
+export function smtpConnectionDetails(smtpUrl) {
+  if (!smtpUrl) return { host: null, port: 465, username: "", secure: true, hasPassword: false };
   try {
-    return new URL(smtpUrl).hostname || null;
+    const parsed = new URL(smtpUrl);
+    const secure = parsed.protocol === "smtps:";
+    return {
+      host: parsed.hostname || null,
+      port: Number(parsed.port || (secure ? 465 : 587)),
+      username: decodeURIComponent(parsed.username || ""),
+      secure,
+      hasPassword: Boolean(parsed.password),
+    };
   } catch {
-    return null;
+    return { host: null, port: 465, username: "", secure: true, hasPassword: false };
   }
+}
+
+export function buildSmtpUrl({ host, port, username, password, secure }) {
+  const parsed = new URL(`${secure ? "smtps" : "smtp"}://${host}`);
+  parsed.port = String(port);
+  parsed.username = username;
+  parsed.password = password;
+  return parsed.toString();
 }

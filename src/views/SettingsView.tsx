@@ -3,6 +3,7 @@ import { ArrowLeft, Bell, Check, ChevronRight, LockKeyhole, Monitor, Moon, Palet
 import { apiFetch, mutate, type SessionUser } from '../lib/api';
 import type { NotificationPreferences } from '../lib/preferences';
 import { useWorkspace } from '../lib/workspace';
+import { showToast } from '../components/ui/ToastViewport';
 
 export type ThemeMode = 'light' | 'dark' | 'system';
 export type Accent = 'blue' | 'green' | 'amber' | 'violet';
@@ -136,6 +137,10 @@ function NotificationSettings({ preferences, onChange }: { preferences: Notifica
 interface EnvironmentState {
   smtpConfigured: boolean;
   smtpHost: string | null;
+  smtpPort: number;
+  smtpUsername: string;
+  smtpSecure: boolean;
+  smtpHasPassword: boolean;
   source: 'workspace' | 'server' | 'none';
   mailFrom: string;
   version: number;
@@ -147,6 +152,7 @@ function EnvironmentSettings() {
   const { connection, run } = useWorkspace();
   const [environment, setEnvironment] = useState<EnvironmentState | null>(null);
   const [loading, setLoading] = useState(true);
+  const [smtpSecure, setSmtpSecure] = useState(true);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const load = async () => {
@@ -154,6 +160,7 @@ function EnvironmentSettings() {
     try {
       const response = await apiFetch<{ data: EnvironmentState }>('/api/admin/environment');
       setEnvironment(response.data);
+      setSmtpSecure(response.data.smtpSecure);
       setError('');
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Could not load environment settings.');
@@ -166,17 +173,24 @@ function EnvironmentSettings() {
     event.preventDefault();
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
-    const smtpUrl = String(form.get('smtpUrl') ?? '').trim();
+    const smtpHost = String(form.get('smtpHost') ?? '').trim();
+    const smtpPort = Number(form.get('smtpPort'));
+    const smtpUsername = String(form.get('smtpUsername') ?? '').trim();
+    const smtpPassword = String(form.get('smtpPassword') ?? '');
     const mailFrom = String(form.get('mailFrom') ?? '').trim();
     setError('');
     setMessage('');
     try {
-      const response = await run(() => mutate<{ data: EnvironmentState }>('/api/admin/environment', 'PATCH', { ...(smtpUrl ? { smtpUrl } : {}), mailFrom }));
+      const response = await run(() => mutate<{ data: EnvironmentState }>('/api/admin/environment', 'PATCH', { smtpHost, smtpPort, smtpUsername, ...(smtpPassword ? { smtpPassword } : {}), smtpSecure, mailFrom }));
       setEnvironment(response.data);
       setMessage('Environment saved.');
-      formElement.reset();
+      showToast('SMTP environment saved.', 'success');
+      const passwordInput = formElement.elements.namedItem('smtpPassword') as HTMLInputElement | null;
+      if (passwordInput) passwordInput.value = '';
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Could not save environment.');
+      const nextError = caught instanceof Error ? caught.message : 'Could not save environment.';
+      setError(nextError);
+      showToast(nextError, 'error');
     }
   };
   const disable = async () => {
@@ -186,8 +200,11 @@ function EnvironmentSettings() {
       const response = await run(() => mutate<{ data: EnvironmentState }>('/api/admin/environment', 'PATCH', { clearSmtp: true }));
       setEnvironment(response.data);
       setMessage('Workspace SMTP disabled.');
+      showToast('Workspace SMTP disabled.', 'warning');
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Could not disable SMTP.');
+      const nextError = caught instanceof Error ? caught.message : 'Could not disable SMTP.';
+      setError(nextError);
+      showToast(nextError, 'error');
     }
   };
   return <div className="settings-panel environment-settings">
@@ -198,8 +215,16 @@ function EnvironmentSettings() {
         <span><strong>{loading ? 'Checking SMTP' : environment?.smtpConfigured ? 'SMTP configured' : 'Copy-link mode'}</strong><small>{environment?.smtpHost ?? 'Customer links are copied manually'}</small></span>
         <span className={`status-pill ${environment?.smtpConfigured ? 'success' : 'warning'}`}>{environment?.source ?? 'none'}</span>
       </div>
-      <form className="modal-form" onSubmit={save}>
-        <label><span>SMTP connection URL</span><input name="smtpUrl" type="password" autoComplete="off" placeholder={environment?.smtpConfigured ? 'Leave blank to keep current' : 'smtps://user:password@mail.example.com'} /></label>
+      <form className="modal-form" key={`${environment?.source ?? 'loading'}-${environment?.version ?? 0}`} onSubmit={save}>
+        <div className="form-columns">
+          <label><span>SMTP host</span><input name="smtpHost" defaultValue={environment?.smtpHost ?? ''} autoComplete="off" placeholder="smtp.example.com" required /></label>
+          <label><span>Port</span><input name="smtpPort" type="number" min="1" max="65535" defaultValue={environment?.smtpPort ?? 465} required /></label>
+        </div>
+        <div className="form-columns">
+          <label><span>Username</span><input name="smtpUsername" defaultValue={environment?.smtpUsername ?? ''} autoComplete="username" placeholder="mailer@example.com" /></label>
+          <label><span>Password</span><input name="smtpPassword" type="password" autoComplete="new-password" placeholder={environment?.smtpHasPassword ? 'Leave blank to keep current' : 'SMTP password'} /></label>
+        </div>
+        <ToggleRow label="Secure connection" description="Use implicit TLS (SMTPS)" checked={smtpSecure} onChange={setSmtpSecure} />
         <label><span>Sender</span><input name="mailFrom" defaultValue={environment?.mailFrom ?? ''} placeholder="DealFlow360 <sales@example.com>" required /></label>
         <div className="form-note"><LockKeyhole size={16} /><span>Credentials are encrypted and never returned to the browser.</span></div>
         {message && <p className="settings-success">{message}</p>}
