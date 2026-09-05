@@ -51,6 +51,8 @@ export function TeamsView({ user }: { user: SessionUser }) {
     const matchesFilter = filter === "all" || (filter === "managed" ? Boolean(team.managerUserId) : !team.managerUserId);
     return matchesQuery && matchesFilter;
   }), [data.teams, filter, query]);
+  const totalPeople = data.teams.reduce((sum, team) => sum + (((team.members as Row[]) ?? []).length), 0);
+  const managersAssigned = data.teams.filter((team) => Boolean(team.managerUserId)).length;
 
   const execute = async (operation: () => Promise<unknown>, fallback: string) => {
     setError("");
@@ -126,16 +128,20 @@ export function TeamsView({ user }: { user: SessionUser }) {
 
   return (
     <div className="page-stack">
-      <section className="page-heading">
-        <div>
-          <span className="page-kicker">Company structure</span>
-          <h2>Teams</h2>
-          <p>Ownership, approvals, and reporting scope.</p>
-        </div>
+      <section className="page-actions-row">
         <div className="modal-actions team-page-actions">
           <button type="button" className="secondary-action" disabled={connection !== "online"} onClick={() => setCreateOpen(true)}><Plus size={16} /> Team</button>
           <button type="button" className="primary-action" disabled={connection !== "online"} onClick={() => { setInviteTeamId(""); setInviteOpen(true); }}><MailPlus size={16} /> Invite</button>
         </div>
+      </section>
+
+      <section className="team-hierarchy-overview" aria-label="Company hierarchy">
+        <div><span>Company</span><strong>DealFlow360</strong></div>
+        <ChevronRight size={18} />
+        <div><span>Sales teams</span><strong>{data.teams.length}</strong></div>
+        <ChevronRight size={18} />
+        <div><span>People</span><strong>{totalPeople}</strong></div>
+        <div className={managersAssigned === data.teams.length ? "complete" : "warning"}><span>Managers</span><strong>{managersAssigned}/{data.teams.length}</strong></div>
       </section>
 
       <div className="data-toolbar standalone-toolbar">
@@ -194,7 +200,7 @@ function TeamWorkspace({ team, user, connection, error, onBack, onInvite, execut
     <div className="page-stack team-detail-page">
       <button type="button" className="mobile-page-back" onClick={onBack}><ArrowLeft size={16} /> Back to teams</button>
       <section className="page-heading">
-        <div><span className="page-kicker">Team workspace</span><h2>{String(team.name)}</h2><p>{members.length} people in this approval scope.</p></div>
+        <div><h2>{String(team.name)}</h2></div>
         <button type="button" className="primary-action" disabled={connection !== "online"} onClick={onInvite}><MailPlus size={16} /> Invite member</button>
       </section>
       {error && <p className="login-error">{error}</p>}

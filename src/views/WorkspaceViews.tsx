@@ -23,7 +23,7 @@ import {
 } from "lucide-react";
 import { Modal } from "../components/ui/Modal";
 import { CustomSelect, type SelectOption } from "../components/ui/CustomSelect";
-import { downloadReport, mutate } from "../lib/api";
+import { ApiError, downloadReport, mutate } from "../lib/api";
 import { showToast } from "../components/ui/ToastViewport";
 import { statusTone } from "../lib/demo-data";
 import { useWorkspace } from "../lib/workspace";
@@ -96,9 +96,6 @@ const ALERT_SEVERITY_OPTIONS: SelectOption[] = [
 ];
 
 function PageHeader({
-  kicker,
-  title,
-  description,
   action,
 }: {
   kicker: string;
@@ -106,16 +103,7 @@ function PageHeader({
   description: string;
   action?: ReactNode;
 }) {
-  return (
-    <section className="page-heading">
-      <div>
-        <span className="page-kicker">{kicker}</span>
-        <h2>{title}</h2>
-        <p>{description}</p>
-      </div>
-      {action}
-    </section>
-  );
+  return action ? <section className="page-actions-row">{action}</section> : null;
 }
 function StatusPill({ value }: { value: unknown }) {
   const label = titleCase(value);
@@ -1056,8 +1044,10 @@ export function DealHealthView() {
   const { data } = useWorkspace();
   const [query, setQuery] = useState("");
   const [severity, setSeverity] = useState("all");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const high = data.alerts.filter((alert) => alert.severity === "high").length;
   const score = Math.max(0, 100 - high * 8 - (data.alerts.length - high) * 3);
+  const selected = data.alerts.find((alert) => text(alert.id) === selectedId);
   const filteredAlerts = useMemo(() => data.alerts.filter((alert) =>
     `${text(alert.title)} ${text(alert.message)} ${text(alert.category)}`.toLowerCase().includes(query.toLowerCase())
     && (severity === "all" || text(alert.severity) === severity),
@@ -1103,7 +1093,7 @@ export function DealHealthView() {
           </div>
         )}
         {filteredAlerts.map((alert) => (
-          <article key={text(alert.id)}>
+          <button type="button" className="deal-alert-row" key={text(alert.id)} onClick={() => setSelectedId(text(alert.id))}>
             <span className={`alert-severity ${text(alert.severity)}`}>
               <AlertTriangle size={18} />
             </span>
@@ -1113,9 +1103,34 @@ export function DealHealthView() {
               <p>{text(alert.message)}</p>
             </div>
             <StatusPill value={alert.severity} />
-          </article>
+            <ChevronRight size={17} />
+          </button>
         ))}
       </section>
+      <Modal open={Boolean(selected)} title={text(selected?.quoteNumber ? `Q-${selected.quoteNumber}` : "Deal signal")} eyebrow="Deal health" onClose={() => setSelectedId(null)} size="wide">
+        {selected && <div className="detail-stack">
+          <div className="detail-hero">
+            <div><span>Customer</span><h3>{text(selected.customer)}</h3><p>{text(selected.owner)} · {text(selected.team)}</p></div>
+            <StatusPill value={selected.severity} />
+          </div>
+          <div className="detail-metrics">
+            <div><span>Deal value</span><strong>{formatMoney(selected.totalMinor)}</strong></div>
+            <div><span>Risk score</span><strong>{text(selected.riskScore)}/100</strong></div>
+            <div><span>Live margin</span><strong>{(amount(selected.marginBps) / 100).toFixed(1)}%</strong></div>
+          </div>
+          <div className="risk-score">
+            <span>{titleCase(selected.category)}</span>
+            <strong>{text(selected.title)}</strong>
+            <p>{text(selected.message)}</p>
+          </div>
+          <dl className="signal-detail-list">
+            <div><dt>Quotation</dt><dd>Q-{text(selected.quoteNumber)}</dd></div>
+            <div><dt>Deal status</dt><dd>{titleCase(selected.quoteStatus)}</dd></div>
+            <div><dt>Customer tier</dt><dd>{text(selected.tier)}</dd></div>
+            <div><dt>Last activity</dt><dd>{new Date(text(selected.updatedAt)).toLocaleString()}</dd></div>
+          </dl>
+        </div>}
+      </Modal>
     </div>
   );
 }
@@ -1123,24 +1138,43 @@ export function DealHealthView() {
 export function ReportsView() {
   const { data, connection } = useWorkspace();
   const [downloading, setDownloading] = useState<"pdf" | "xls" | null>(null);
-  const [error, setError] = useState("");
-  const quoted = data.quotes.reduce(
+  const [status, setStatus] = useState("all");
+  const [ownerId, setOwnerId] = useState("all");
+  const ownerOptions = useMemo<SelectOption[]>(() => [
+    { value: "all", label: "All owners" },
+    ...Array.from(new Map(data.quotes.map((quote) => [text(quote.ownerUserId), text(quote.owner)])).entries())
+      .map(([value, label]) => ({ value, label }))
+      .sort((a, b) => a.label.localeCompare(b.label)),
+  ], [data.quotes]);
+  const filteredQuotes = useMemo(() => data.quotes.filter((quote) =>
+    (status === "all" || text(quote.status) === status)
+    && (ownerId === "all" || text(quote.ownerUserId) === ownerId)
+  ), [data.quotes, ownerId, status]);
+  const quoted = filteredQuotes.reduce(
     (sum, quote) => sum + amount(quote.totalMinor),
     0,
   );
-  const approved = data.quotes
+  const approved = filteredQuotes
     .filter((quote) => ["approved", "accepted"].includes(text(quote.status)))
     .reduce((sum, quote) => sum + amount(quote.totalMinor), 0);
-  const averageMargin = data.quotes.length
-    ? data.quotes.reduce((sum, quote) => sum + amount(quote.marginBps), 0) /
-      data.quotes.length /
+  const accepted = filteredQuotes.filter((quote) => text(quote.status) === "accepted");
+  const averageMargin = filteredQuotes.length
+    ? filteredQuotes.reduce((sum, quote) => sum + amount(quote.marginBps), 0) /
+      filteredQuotes.length /
       100
     : 0;
+  const conversion = filteredQuotes.length ? accepted.length / filteredQuotes.length * 100 : 0;
+  const highRisk = filteredQuotes.filter((quote) => amount(quote.riskScore) >= 70).length;
+  const statusSeries = QUOTE_STATUS_OPTIONS.slice(1).map((option) => ({
+    ...option,
+    count: filteredQuotes.filter((quote) => text(quote.status) === option.value).length,
+  })).filter((item) => item.count > 0);
+  const maxStatusCount = Math.max(1, ...statusSeries.map((item) => item.count));
+  const topDeals = [...filteredQuotes].sort((a, b) => amount(b.totalMinor) - amount(a.totalMinor)).slice(0, 6);
   const download = async (format: "pdf" | "xls") => {
     setDownloading(format);
-    setError("");
     try {
-      const file = await downloadReport(format);
+      const file = await downloadReport(format, { status, ownerId });
       const url = URL.createObjectURL(file.blob);
       const anchor = document.createElement("a");
       anchor.href = url;
@@ -1149,8 +1183,12 @@ export function ReportsView() {
       anchor.click();
       anchor.remove();
       window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
+      showToast(`${format.toUpperCase()} report downloaded.`, "success");
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Report download failed.");
+      const message = caught instanceof ApiError && caught.status === 401
+        ? "Your session expired. Sign in again to export."
+        : caught instanceof Error ? caught.message : "Report download failed.";
+      showToast(message, "error");
     } finally {
       setDownloading(null);
     }
@@ -1182,7 +1220,11 @@ export function ReportsView() {
           </div>
         }
       />
-      <ErrorText value={error} />
+      <div className="data-toolbar standalone-toolbar report-toolbar">
+        <CustomSelect className="toolbar-custom-select" ariaLabel="Filter report by status" icon={<Filter size={15} />} options={QUOTE_STATUS_OPTIONS} value={status} onChange={setStatus} />
+        <CustomSelect className="toolbar-custom-select" ariaLabel="Filter report by owner" icon={<Filter size={15} />} options={ownerOptions} value={ownerId} onChange={setOwnerId} />
+        <span className="result-count">{filteredQuotes.length} deals</span>
+      </div>
       <section className="metric-grid compact">
         <article className="metric-card">
           <span className="metric-icon">
@@ -1190,7 +1232,7 @@ export function ReportsView() {
           </span>
           <span>Quoted value</span>
           <strong>{formatMoney(quoted)}</strong>
-          <small>{data.quotes.length} quotations</small>
+          <small>{filteredQuotes.length} quotations</small>
         </article>
         <article className="metric-card">
           <span className="metric-icon">
@@ -1208,6 +1250,32 @@ export function ReportsView() {
           <strong>{averageMargin.toFixed(1)}%</strong>
           <small>Current workspace</small>
         </article>
+        <article className="metric-card">
+          <span className="metric-icon"><AlertTriangle size={18} /></span>
+          <span>High-risk deals</span>
+          <strong>{highRisk}</strong>
+          <small>Risk score of 70 or more</small>
+        </article>
+      </section>
+      <section className="report-grid">
+        <article className="report-chart">
+          <header><div><span>Pipeline distribution</span><strong>Deal stages</strong></div><StatusPill value={`${filteredQuotes.length} total`} /></header>
+          <div className="bar-chart">
+            {statusSeries.map((item) => <div key={item.value}><i style={{ height: `${Math.max(8, item.count / maxStatusCount * 100)}%` }} /><strong>{item.count}</strong><span>{item.label}</span></div>)}
+          </div>
+        </article>
+        <article className="report-breakdown">
+          <span>Win conversion</span><strong>{formatMoney(accepted.reduce((sum, quote) => sum + amount(quote.totalMinor), 0))}</strong>
+          <div className="progress-ring" style={{ background: `conic-gradient(var(--accent) 0 ${conversion}%, var(--surface-soft) ${conversion}% 100%)` }}><span>{conversion.toFixed(0)}%</span></div>
+          <p>{accepted.length} accepted deals from {filteredQuotes.length} visible quotations.</p>
+        </article>
+      </section>
+      <section className="data-panel report-leaderboard">
+        <div className="report-section-title"><div><span>Top opportunities</span><strong>Highest-value deals</strong></div><span>{formatMoney(quoted)}</span></div>
+        <div className="record-table report-table">
+          <div className="record-table-head"><span>Customer</span><span>Owner</span><span>Team</span><span>Value</span><span>Status</span></div>
+          {topDeals.map((quote) => <div className="record-row" key={text(quote.id)}><span className="record-primary"><strong>{text(quote.customer)}</strong><small>{text(quote.quoteNumber)}</small></span><span data-label="Owner">{text(quote.owner)}</span><span data-label="Team">{text(quote.team)}</span><strong data-label="Value">{formatMoney(quote.totalMinor)}</strong><span data-label="Status"><StatusPill value={quote.status} /></span></div>)}
+        </div>
       </section>
     </div>
   );

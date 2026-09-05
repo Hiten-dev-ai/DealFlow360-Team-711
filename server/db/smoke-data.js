@@ -55,13 +55,15 @@ const settings = {
 };
 
 export const smokeDataSummary = Object.freeze({
+  accounts: 40,
+  teams: 6,
   customers: 24,
   products: 16,
   quotations: 42,
   notificationsPerUser: 32,
 });
 
-export async function seedSmokeData(client, { workspaceId, users, team, tiers, categories, products, customers, warehouses }) {
+export async function seedSmokeData(client, { workspaceId, users, team, staffUsers, tiers, categories, products, customers, warehouses }) {
   const allProducts = [...products];
   for (const [id, categoryIndex, sku, name, billingType, cadence, priceMinor, costMinor] of extraProducts) {
     const row = [id, categories[categoryIndex][0], sku, name, billingType, cadence, priceMinor, costMinor];
@@ -97,6 +99,11 @@ export async function seedSmokeData(client, { workspaceId, users, team, tiers, c
   let approvalIndex = 1;
   let revisionIndex = 1;
   let negotiationIndex = 1;
+  const salesStaff = staffUsers.filter((user) => user.role === 'sales_rep');
+  const teamManagers = new Map([
+    [team.id, users.sales_manager],
+    ...staffUsers.filter((user) => user.role === 'sales_manager').map((user) => [user.teamId, user.id]),
+  ]);
 
   for (let index = 0; index < smokeDataSummary.quotations; index += 1) {
     const quoteId = uuid('71160000', index + 1);
@@ -129,7 +136,14 @@ export async function seedSmokeData(client, { workspaceId, users, team, tiers, c
       : status === 'pending_manager'
         ? Math.max(46, calculation.riskScore)
         : calculation.riskScore;
-    const ownerUserId = index % 6 === 0 ? users.admin : users.sales_rep;
+    const owner = index % 10 === 0
+      ? { id: users.admin, teamId: team.id }
+      : index % 3 === 0
+        ? salesStaff[(Math.floor(index / 3) - 1 + salesStaff.length) % salesStaff.length]
+        : { id: users.sales_rep, teamId: team.id };
+    const ownerUserId = owner.id;
+    const quoteTeamId = owner.teamId;
+    const quoteManagerId = teamManagers.get(quoteTeamId) ?? users.sales_manager;
     const updatedDaysAgo = index % 9 === 0 ? 8 : index % 6;
     const createdAt = daysFromNow(-(48 - index));
     const updatedAt = daysFromNow(-updatedDaysAgo);
@@ -146,7 +160,7 @@ export async function seedSmokeData(client, { workspaceId, users, team, tiers, c
        margin_bps=EXCLUDED.margin_bps,risk_score=EXCLUDED.risk_score,approval_route=EXCLUDED.approval_route,
        valid_until=EXCLUDED.valid_until,submitted_at=EXCLUDED.submitted_at,accepted_at=EXCLUDED.accepted_at,
        created_at=EXCLUDED.created_at,updated_at=EXCLUDED.updated_at`,
-      [quoteId, workspaceId, 711001 + index, customer[0], ownerUserId, team.id, status, revision,
+      [quoteId, workspaceId, 711001 + index, customer[0], ownerUserId, quoteTeamId, status, revision,
         calculation.subtotalMinor, calculation.discountMinor, calculation.totalMinor, calculation.costMinor,
         calculation.marginBps, riskScore, route, status === 'expired' ? dateOnly(-3) : dateOnly(14 + (index % 21)),
         submittedAt, acceptedAt, createdAt, updatedAt],
@@ -166,16 +180,16 @@ export async function seedSmokeData(client, { workspaceId, users, team, tiers, c
     await client.query('DELETE FROM approval_requests WHERE quote_id=$1', [quoteId]);
     const approvalRows = [];
     if (status === 'pending_manager') approvalRows.push(['manager', 'pending', null]);
-    if (status === 'pending_finance') approvalRows.push(['manager', 'approved', users.sales_manager], ['finance', 'pending', null]);
+    if (status === 'pending_finance') approvalRows.push(['manager', 'approved', quoteManagerId], ['finance', 'pending', null]);
     if (['approved', 'accepted', 'negotiation'].includes(status)) {
-      for (const stage of route) approvalRows.push([stage, 'approved', stage === 'manager' ? users.sales_manager : users.finance_ops]);
+      for (const stage of route) approvalRows.push([stage, 'approved', stage === 'manager' ? quoteManagerId : users.finance_ops]);
     }
-    if (status === 'rejected') approvalRows.push(['manager', 'rejected', users.sales_manager]);
+    if (status === 'rejected') approvalRows.push(['manager', 'rejected', quoteManagerId]);
     for (const [stage, approvalStatus, decidedBy] of approvalRows) {
       await client.query(
         `INSERT INTO approval_requests(id,quote_id,quote_revision,stage,status,assigned_team_id,decided_by,reason,decided_at,created_at)
          VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-        [uuid('71162000', approvalIndex++), quoteId, revision, stage, approvalStatus, team.id, decidedBy,
+        [uuid('71162000', approvalIndex++), quoteId, revision, stage, approvalStatus, quoteTeamId, decidedBy,
           approvalStatus === 'rejected' ? 'Commercial terms require revision.' : approvalStatus === 'approved' ? 'Approved within governed limits.' : null,
           decidedBy ? daysFromNow(-(updatedDaysAgo + 1)) : null, daysFromNow(-(updatedDaysAgo + 3))],
       );
@@ -308,7 +322,7 @@ export async function seedSmokeData(client, { workspaceId, users, team, tiers, c
     ['risk', 'Deal health signal', 'A commercial risk signal needs attention.', true],
     ['subscription', 'Subscription milestone', 'A recurring billing milestone is approaching.', false],
   ];
-  const userIds = Object.values(users);
+  const userIds = [...Object.values(users), ...staffUsers.map((user) => user.id)];
   let notificationIndex = 1;
   for (const userId of userIds) {
     for (let index = 0; index < smokeDataSummary.notificationsPerUser; index += 1) {

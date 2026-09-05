@@ -132,7 +132,7 @@ async function listQuotes(store, auth) {
             q.discount_minor AS "discountMinor", q.total_minor AS "totalMinor", q.cost_minor AS "costMinor",
             q.margin_bps AS "marginBps", q.risk_score AS "riskScore", q.approval_route AS "approvalRoute",
             q.version, q.valid_until AS "validUntil", q.updated_at AS "updatedAt",
-            c.id AS "customerId", c.name AS customer, t.name AS tier, u.full_name AS owner, q.owner_user_id AS "ownerUserId", q.team_id AS "teamId",
+            c.id AS "customerId", c.name AS customer, t.name AS tier, u.full_name AS owner, q.owner_user_id AS "ownerUserId", q.team_id AS "teamId", st.name AS team,
             COALESCE((SELECT json_agg(json_build_object('id', l.id, 'productId', p.id, 'product', p.name, 'sku', p.sku,
               'quantity', l.quantity, 'unitPriceMinor', l.unit_price_minor, 'discountBps', l.discount_bps,
               'billingType', l.billing_type, 'cadence', l.cadence) ORDER BY p.name)
@@ -143,7 +143,7 @@ async function listQuotes(store, auth) {
               JOIN products suggested ON suggested.id=ur.suggested_product_id
               WHERE ur.workspace_id=q.workspace_id AND ur.active=true AND source_line.quantity>=ur.min_quantity
                 AND NOT EXISTS(SELECT 1 FROM quote_lines existing WHERE existing.quote_id=q.id AND existing.product_id=suggested.id)), '[]') AS suggestions
-       FROM quotes q JOIN customers c ON c.id = q.customer_id LEFT JOIN customer_tiers t ON t.id=c.tier_id JOIN users u ON u.id = q.owner_user_id
+       FROM quotes q JOIN customers c ON c.id = q.customer_id LEFT JOIN customer_tiers t ON t.id=c.tier_id JOIN users u ON u.id = q.owner_user_id JOIN sales_teams st ON st.id=q.team_id
       WHERE q.workspace_id = $1${scope.sql} ORDER BY q.updated_at DESC LIMIT 200`,
     [auth.user.workspaceId, ...scope.params],
   );
@@ -352,7 +352,12 @@ export function registerDomainRoutes(app, { store, config, auth }) {
         [current.user.workspaceId],
       ) : Promise.resolve({ rows: [] }),
       store.query(
-        `SELECT a.id,a.quote_id AS "quoteId",a.category,a.severity,a.title,a.message,a.created_at AS "createdAt" FROM deal_alerts a JOIN quotes q ON q.id=a.quote_id WHERE a.workspace_id=$1 AND a.resolved_at IS NULL${scopedQuotes.sql} ORDER BY a.created_at DESC`,
+        `SELECT a.id,a.quote_id AS "quoteId",a.category,a.severity,a.title,a.message,a.created_at AS "createdAt",
+          q.quote_number AS "quoteNumber",q.status AS "quoteStatus",q.total_minor AS "totalMinor",q.margin_bps AS "marginBps",
+          q.risk_score AS "riskScore",q.updated_at AS "updatedAt",c.name AS customer,ct.name AS tier,u.full_name AS owner,st.name AS team
+         FROM deal_alerts a JOIN quotes q ON q.id=a.quote_id JOIN customers c ON c.id=q.customer_id
+         LEFT JOIN customer_tiers ct ON ct.id=c.tier_id JOIN users u ON u.id=q.owner_user_id JOIN sales_teams st ON st.id=q.team_id
+         WHERE a.workspace_id=$1 AND a.resolved_at IS NULL${scopedQuotes.sql} ORDER BY a.created_at DESC`,
         [current.user.workspaceId, ...scopedQuotes.params],
       ),
       store.query(
@@ -1796,10 +1801,16 @@ export function registerDomainRoutes(app, { store, config, auth }) {
     const unavailable = dbRequired(c, store);
     if (unavailable) return unavailable;
     const current = c.get("auth");
-    const quotes = await listQuotes(store, current);
+    const filter = z.object({
+      status: z.enum(["draft", "pending_manager", "pending_finance", "approved", "negotiation", "accepted", "rejected", "expired"]).optional(),
+      ownerId: uuid.optional(),
+    }).safeParse({ status: c.req.query("status") || undefined, ownerId: c.req.query("ownerId") || undefined });
+    if (!filter.success) return c.json({ error: "Invalid report filters.", code: "INVALID_INPUT" }, 400);
+    const scoped = await listQuotes(store, current);
+    const quotes = scoped.filter((quote) => (!filter.data.status || quote.status === filter.data.status) && (!filter.data.ownerId || quote.ownerUserId === filter.data.ownerId));
     if (format === "xls") {
-      const columns = ["Quote", "Customer", "Owner", "Status", "Value (INR minor)", "Margin bps", "Risk"];
-      const rows = quotes.map((quote) => [quote.quoteNumber, quote.customer, quote.owner, quote.status, quote.totalMinor, quote.marginBps, quote.riskScore]);
+      const columns = ["Quote", "Customer", "Owner", "Team", "Status", "Value (INR minor)", "Margin bps", "Risk"];
+      const rows = quotes.map((quote) => [quote.quoteNumber, quote.customer, quote.owner, quote.team, quote.status, quote.totalMinor, quote.marginBps, quote.riskScore]);
       const cells = (values) => `<Row>${values.map((value) => `<Cell><Data ss:Type="${typeof value === "number" ? "Number" : "String"}">${xml(value)}</Data></Cell>`).join("")}</Row>`;
       const workbook = `<?xml version="1.0"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"><Worksheet ss:Name="Deals"><Table>${cells(columns)}${rows.map(cells).join("")}</Table></Worksheet></Workbook>`;
       c.header("Content-Type", "application/vnd.ms-excel; charset=utf-8");
@@ -1812,6 +1823,11 @@ export function registerDomainRoutes(app, { store, config, auth }) {
       document.on("data", (chunk) => chunks.push(chunk));
       const done = new Promise((resolve) => document.on("end", resolve));
       document.fontSize(20).text("DealFlow360 Deal Report");
+      document.fontSize(9).fillColor("#5b6475").text(`Generated ${new Date().toISOString()} · ${quotes.length} role-scoped deals`);
+      document.moveDown();
+      const total = quotes.reduce((sum, quote) => sum + quote.totalMinor, 0);
+      const won = quotes.filter((quote) => quote.status === "accepted").length;
+      document.fillColor("#111827").fontSize(11).text(`Pipeline value: INR ${(total / 100).toLocaleString("en-IN")}    Accepted: ${won}    Conversion: ${quotes.length ? Math.round(won / quotes.length * 100) : 0}%`);
       document.moveDown();
       for (const quote of quotes)
         document

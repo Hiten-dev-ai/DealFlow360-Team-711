@@ -70,8 +70,11 @@ export async function logout() {
 
 export const getBootstrap = () => apiFetch<BootstrapResponse>('/api/bootstrap');
 
-export async function downloadReport(format: 'pdf' | 'xls') {
-  const response = await fetch(`/api/reports/deals.${format}`, {
+export async function downloadReport(format: 'pdf' | 'xls', filters: { status?: string; ownerId?: string } = {}) {
+  const query = new URLSearchParams();
+  if (filters.status && filters.status !== 'all') query.set('status', filters.status);
+  if (filters.ownerId && filters.ownerId !== 'all') query.set('ownerId', filters.ownerId);
+  const response = await fetch(`/api/reports/deals.${format}${query.size ? `?${query}` : ''}`, {
     credentials: 'same-origin',
     cache: 'no-store',
   });

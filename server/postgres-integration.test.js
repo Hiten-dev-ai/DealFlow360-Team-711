@@ -86,6 +86,10 @@ describe.runIf(Boolean(databaseUrl))('PostgreSQL end-to-end flow', () => {
     expect(xls.status).toBe(200);
     expect(xls.headers.get('content-type')).toContain('application/vnd.ms-excel');
     expect(await xls.text()).toContain('<Workbook');
+    const unauthenticatedReport = await request(app, '/api/reports/deals.pdf');
+    expect(unauthenticatedReport.status).toBe(401);
+    const adminReport = await request(app, '/api/reports/deals.pdf?status=approved', { auth: admin });
+    expect(adminReport.status).toBe(200);
 
     const customer = initial.customers[0];
     const oneTime = initial.catalog.find((product) => product.billingType === 'one_time');
@@ -169,6 +173,15 @@ describe.runIf(Boolean(databaseUrl))('PostgreSQL end-to-end flow', () => {
     expect(paid.status).toBe(200);
 
     const adminWorkspace = (await (await request(app, '/api/bootstrap', { auth: admin })).json()).data;
+    expect(adminWorkspace.teams).toHaveLength(6);
+    expect(adminWorkspace.teams.reduce((sum, currentTeam) => sum + currentTeam.members.length, 0)).toBe(40);
+    expect(adminWorkspace.teams.every((currentTeam) => currentTeam.managerUserId)).toBe(true);
+    const generatedRep = await login(app, 'north.rep1@dealflow360.demo', process.env.DEMO_STAFF_PASSWORD ?? process.env.DEMO_SALES_PASSWORD);
+    expect(generatedRep.user.activeRole).toBe('sales_rep');
+    const generatedRepWorkspace = (await (await request(app, '/api/bootstrap', { auth: generatedRep })).json()).data;
+    expect(generatedRepWorkspace.quotes.length).toBeGreaterThan(0);
+    expect(new Set(generatedRepWorkspace.quotes.map((item) => item.owner))).toEqual(new Set(['Aditi Rao']));
+    expect(generatedRepWorkspace.fulfillment).toEqual([]);
     const primaryTeam = adminWorkspace.teams.find((team) => team.members.some((member) => member.id === sales.user.id));
     expect(primaryTeam).toBeTruthy();
     expect((await request(app, `/api/admin/teams/${primaryTeam.id}/members/${sales.user.id}`, { method: 'PATCH', auth: admin, body: { role: 'sales_manager' } })).status).toBe(200);

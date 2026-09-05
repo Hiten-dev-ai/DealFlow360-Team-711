@@ -91,8 +91,8 @@ Customer portal sessions are separate from internal accounts and are restricted 
 
 | Entity | Seeded records |
 | --- | ---: |
-| Internal users | 4 |
-| Sales teams | 1 |
+| Internal users | 40 |
+| Sales teams | 6 |
 | Customer tiers | 3 — Bronze, Silver, and Gold |
 | Customers | 24 |
 | Product categories | 3 |
@@ -114,6 +114,8 @@ The dataset includes draft, pending, approved, negotiating, accepted, rejected, 
 - `sujith@dealflow360.demo` - Sales Rep
 - `manager@dealflow360.demo` - Sales Manager
 - `finance@dealflow360.demo` - Finance/Ops
+
+The extended hierarchy adds five regional/segment managers, 29 additional sales representatives, one additional Admin, and one additional Finance/Ops account. Generated sales logins follow patterns such as `north.manager@dealflow360.demo`, `north.rep1@dealflow360.demo`, `strategic.rep3@dealflow360.demo`, and `channel.rep5@dealflow360.demo`.
 
 Passwords are supplied through the protected runtime environment and are never stored in Git or shown on the login screen.
 
@@ -247,7 +249,8 @@ npm run dev
 | `HOST` / `PORT` | No | Listener address; production uses `127.0.0.1:4174` |
 | `WORKSPACE_ID` | No | Single-workspace identifier |
 | `RELEASE_ID` | Production | Version exposed by `/api/version` |
-| `DEMO_*_PASSWORD` | Seeding | Four demo-account passwords, supplied outside Git |
+| `DEMO_*_PASSWORD` | Seeding | Four primary demo-account passwords, supplied outside Git |
+| `DEMO_STAFF_PASSWORD` | Seeding | Password for generated hierarchy accounts; falls back to `DEMO_SALES_PASSWORD` |
 | `SMTP_URL` | No | SMTP connection URL for invitation and portal email |
 | `MAIL_FROM` | No | Sender identity for email delivery |
 | `SETTINGS_ENCRYPTION_KEY` | Admin SMTP UI | Encrypts workspace SMTP credentials before database storage |
