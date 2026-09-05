@@ -338,7 +338,7 @@ export function AppShell({ activeView, children, user, resolvedTheme, notificati
                 onFocus={() => setSearchFocused(true)}
                 onChange={(event) => { setSearchQuery(event.target.value); setSearchFocused(true); setSearchActiveIndex(-1); }}
                 onKeyDown={handleInlineSearchKeyDown}
-                placeholder="Search modules and actions..."
+                placeholder="Search anything"
               />
               <span className="shortcut"><kbd>Ctrl</kbd><b>+</b><kbd>K</kbd></span>
             </div>
@@ -391,7 +391,7 @@ export function AppShell({ activeView, children, user, resolvedTheme, notificati
       </aside>
 
       <Modal open={searchOpen} title="Search workspace" eyebrow="Quick navigation" className="search-modal" onClose={closeFullSearch}>
-        <div className="command-search search-transition-target"><Search size={18} /><input ref={searchDialogInput} value={searchQuery} onChange={(event) => { setSearchQuery(event.target.value); setSearchActiveIndex(-1); }} onKeyDown={handleDialogSearchKeyDown} placeholder="Find a module..." aria-label="Search modules" /></div>
+        <div className="command-search search-transition-target"><Search size={18} /><input ref={searchDialogInput} value={searchQuery} onChange={(event) => { setSearchQuery(event.target.value); setSearchActiveIndex(-1); }} onKeyDown={handleDialogSearchKeyDown} placeholder="Search anything" aria-label="Search modules" /></div>
         <div className="command-results">
           {fullSearchResults.length === 0 && <p className="compact-empty"><Activity size={18} /> No matching module.</p>}
           {fullSearchResults.map((item, index) => {

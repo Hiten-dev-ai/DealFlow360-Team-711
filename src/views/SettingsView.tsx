@@ -68,12 +68,14 @@ export function SettingsView({
 
   return (
     <div className="settings-page">
-      <div className="settings-mobile-breadcrumb" aria-label="Settings navigation">
+      <div className="settings-mobile-header">
         <button type="button" className="settings-mobile-back" aria-label={mobileDetailOpen ? 'Back to settings categories' : 'Back to workspace'} onClick={mobileDetailOpen ? () => setMobileDetailOpen(false) : onBack}>
           <ArrowLeft size={16} /><span>Back</span>
         </button>
-        <span>Settings</span>
-        {mobileDetailOpen && <><ChevronRight size={14} /><strong>{categoryLabels[category]}</strong></>}
+        <div className="settings-mobile-breadcrumb" aria-label="Settings navigation">
+          <span>Settings</span>
+          {mobileDetailOpen && <><ChevronRight size={14} /><strong>{categoryLabels[category]}</strong></>}
+        </div>
       </div>
 
       <div className="settings-layout">

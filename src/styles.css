@@ -58,8 +58,10 @@ button:focus-visible, input:focus-visible { outline: 3px solid color-mix(in srgb
 .field-shell input:-webkit-autofill:focus {
   -webkit-text-fill-color: var(--text);
   caret-color: var(--text);
-  box-shadow: 0 0 0 1000px var(--surface-soft) inset;
-  -webkit-box-shadow: 0 0 0 1000px var(--surface-soft) inset;
+  background-color: transparent !important;
+  box-shadow: 0 0 0 1000px var(--surface-soft) inset !important;
+  -webkit-box-shadow: 0 0 0 1000px var(--surface-soft) inset !important;
+  -webkit-background-clip: text;
   transition: background-color 9999s ease-out 0s;
 }
 .drawer-locked { overflow: hidden; }
@@ -688,6 +690,7 @@ button.record-row { cursor: pointer; }
   border-radius: 0;
   background: transparent;
 }
+.settings-mobile-header { display: none; }
 .settings-mobile-breadcrumb { display: none; }
 .settings-layout {
   display: grid;
@@ -974,19 +977,25 @@ button.record-row { cursor: pointer; }
     border: 0;
     border-radius: 0;
   }
+  .settings-mobile-header {
+    display: grid;
+    height: 78px;
+    grid-template-rows: 36px 42px;
+    padding: 0 8px;
+  }
   .settings-mobile-breadcrumb {
     display: flex;
-    height: 46px;
+    height: 42px;
     align-items: center;
     gap: 5px;
-    padding: 0 8px 6px;
+    padding: 0 8px;
     color: var(--text-muted);
     font-size: .76rem;
     font-weight: 740;
   }
   .settings-mobile-breadcrumb > span:last-child { overflow: hidden; color: var(--text); text-overflow: ellipsis; white-space: nowrap; }
-  .settings-mobile-back { width: 38px; min-height: 38px; padding: 0; justify-content: center; }
-  .settings-layout { display: block; height: calc(100% - 46px); overflow: hidden; }
+  .settings-mobile-header > .settings-mobile-back { width: fit-content; min-height: 36px; padding: 0 8px 0 2px; justify-content: flex-start; }
+  .settings-layout { display: block; height: calc(100% - 78px); overflow: hidden; }
   .settings-mobile-panel-hidden { display: none !important; }
   .settings-navigation {
     display: flex;
