@@ -1,4 +1,5 @@
 import { useEffect, useRef, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 
 interface ModalProps {
@@ -26,14 +27,14 @@ export function Modal({ open, title, eyebrow, children, onClose, size = 'standar
     return () => {
       document.removeEventListener('keydown', closeOnEscape);
       document.body.classList.remove('drawer-locked');
-      previous?.focus();
+      if (previous?.isConnected) previous.focus({ preventScroll: true });
     };
   }, [open, onClose]);
 
   if (!open) return null;
 
-  return (
-    <div className="modal-layer" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+  return createPortal(
+    <div className={`modal-layer ${className ? `${className}-layer` : ''}`.trim()} role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
       <section className={`modal-card ${size === 'wide' ? 'wide' : ''} ${className}`.trim()} role="dialog" aria-modal="true" aria-labelledby="modal-title">
         <header className="modal-header">
           <div>{eyebrow && <span>{eyebrow}</span>}<h2 id="modal-title">{title}</h2></div>
@@ -41,6 +42,7 @@ export function Modal({ open, title, eyebrow, children, onClose, size = 'standar
         </header>
         <div className="modal-content">{children}</div>
       </section>
-    </div>
+    </div>,
+    document.body,
   );
 }

@@ -4,10 +4,11 @@ import { createSessionRecord, createSessionToken, hashSessionToken, isSessionAct
 import { verifyPassword } from '../auth/password.js';
 import { readCookie, sessionCookie } from '../http/cookies.js';
 import { createRateLimiter } from '../middleware/rate-limit.js';
+import { csrfTokenForSession } from '../auth/csrf.js';
 
 const loginSchema = z.object({
   email: z.string().trim().email().max(254),
-  password: z.string().min(12).max(256),
+  password: z.string().min(7).max(256),
 });
 
 function publicUser(user, activeRole) {
@@ -17,11 +18,12 @@ function publicUser(user, activeRole) {
     fullName: user.fullName,
     roles: user.roles,
     activeRole,
+    teamId: user.teamId ?? null,
   };
 }
 
 function clientIp(c) {
-  return c.req.header('X-Real-IP') ?? c.req.header('X-Forwarded-For')?.split(',')[0]?.trim() ?? 'unknown';
+  return c.req.header('X-Real-IP') ?? c.req.header('X-Forwarded-For')?.split(',')[0]?.trim() ?? null;
 }
 
 export function registerAuthRoutes(app, { store, config }) {
@@ -42,7 +44,7 @@ export function registerAuthRoutes(app, { store, config }) {
     await store.createSession(session);
     await store.writeAudit({ userId: user.id, workspaceId: user.workspaceId, action: 'auth.login', ipAddress: clientIp(c) });
     c.header('Set-Cookie', sessionCookie(config.sessionCookieName, token, config, Math.floor(config.sessionAbsoluteMs / 1000)));
-    return c.json({ user: publicUser(user, activeRole) });
+    return c.json({ user: publicUser(user, activeRole), csrfToken: csrfTokenForSession(token) });
   });
 
   app.get('/api/auth/session', async (c) => {
@@ -50,7 +52,7 @@ export function registerAuthRoutes(app, { store, config }) {
     const session = token ? await store.getSessionByTokenHash(hashSessionToken(token)) : null;
     if (!session || !isSessionActive(session, config)) return c.json({ error: 'Authentication required.', code: 'AUTH_REQUIRED' }, 401);
     await store.touchSession(session.tokenHash, Date.now());
-    return c.json({ authenticated: true, user: publicUser(session.user, session.activeRole) });
+    return c.json({ authenticated: true, user: publicUser(session.user, session.activeRole), csrfToken: csrfTokenForSession(token) });
   });
 
   app.post('/api/auth/logout', async (c) => {

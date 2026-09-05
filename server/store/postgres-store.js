@@ -14,11 +14,11 @@ export class PostgresStore {
   async findUserByEmail(email) {
     const result = await this.pool.query(
       `SELECT u.id, u.email, u.full_name AS "fullName", u.password_hash AS "passwordHash",
-              u.workspace_id AS "workspaceId", array_agg(m.role ORDER BY m.role) AS roles
+              u.workspace_id AS "workspaceId", m.team_id AS "teamId", array_agg(m.role ORDER BY m.role) AS roles
          FROM users u
          JOIN workspace_memberships m ON m.user_id = u.id AND m.workspace_id = u.workspace_id
         WHERE lower(u.email) = lower($1)
-        GROUP BY u.id`,
+        GROUP BY u.id, m.team_id`,
       [email],
     );
     return result.rows[0] ?? null;
@@ -39,19 +39,19 @@ export class PostgresStore {
       `SELECT s.id, s.token_hash AS "tokenHash", s.user_id AS "userId", s.workspace_id AS "workspaceId",
               s.active_role AS "activeRole", extract(epoch FROM s.created_at) * 1000 AS "createdAt",
               extract(epoch FROM s.last_seen_at) * 1000 AS "lastSeenAt", extract(epoch FROM s.expires_at) * 1000 AS "expiresAt",
-              u.id AS "user_id", u.email, u.full_name AS "fullName", u.password_hash AS "passwordHash",
+              u.id AS "user_id", u.email, u.full_name AS "fullName", u.password_hash AS "passwordHash", m.team_id AS "teamId",
               array_agg(m.role ORDER BY m.role) AS roles
          FROM sessions s
          JOIN users u ON u.id = s.user_id
          JOIN workspace_memberships m ON m.user_id = s.user_id AND m.workspace_id = s.workspace_id
         WHERE s.token_hash = $1
-        GROUP BY s.id, u.id`,
+        GROUP BY s.id, u.id, m.team_id`,
       [tokenHash],
     );
     const row = result.rows[0];
     if (!row) return null;
     const { user_id: _userId, ...session } = row;
-    return { ...session, user: { id: row.user_id, email: row.email, fullName: row.fullName, passwordHash: row.passwordHash, roles: row.roles, workspaceId: row.workspaceId } };
+    return { ...session, user: { id: row.user_id, email: row.email, fullName: row.fullName, passwordHash: row.passwordHash, roles: row.roles, workspaceId: row.workspaceId, teamId: row.teamId } };
   }
 
   async touchSession(tokenHash, timestamp) {
@@ -74,6 +74,25 @@ export class PostgresStore {
     const startedAt = performance.now();
     await this.pool.query('SELECT 1');
     return { status: 'connected', latencyMs: Math.round(performance.now() - startedAt) };
+  }
+
+  async query(text, values = []) {
+    return this.pool.query(text, values);
+  }
+
+  async transaction(work) {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const result = await work(client);
+      await client.query('COMMIT');
+      return result;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async close() {

@@ -60,9 +60,10 @@ export function formatCurrency(value: number) {
 }
 
 export function statusTone(status: string): Tone {
-  if (['Approved', 'Paid', 'Active', 'Ready', 'Resolved'].includes(status)) return 'success';
-  if (['Overdue', 'Rejected', 'Backorder', 'High'].includes(status)) return 'danger';
-  if (['Pending approval', 'Negotiation', 'Due', 'Medium'].includes(status)) return 'warning';
-  if (['Picking', 'In review'].includes(status)) return 'info';
+  const normalized = status.toLowerCase();
+  if (['approved', 'accepted', 'paid', 'active', 'ready', 'reserved', 'resolved'].includes(normalized)) return 'success';
+  if (['overdue', 'rejected', 'backorder', 'high', 'cancelled'].includes(normalized)) return 'danger';
+  if (['pending approval', 'pending manager', 'pending finance', 'negotiation', 'due', 'medium', 'paused'].includes(normalized)) return 'warning';
+  if (['picking', 'in review', 'planned', 'partially paid'].includes(normalized)) return 'info';
   return 'neutral';
 }
