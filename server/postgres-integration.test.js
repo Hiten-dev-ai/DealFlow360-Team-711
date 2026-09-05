@@ -42,7 +42,10 @@ describe.runIf(Boolean(databaseUrl))('PostgreSQL end-to-end flow', () => {
     expect(initial.fulfillment).toEqual([]);
     expect(initial.subscriptions).toEqual([]);
     expect(initial.invoices).toEqual([]);
+    expect(initial.payments).toEqual([]);
     expect(initial.teams).toEqual([]);
+    expect(initial.approvals).toEqual([]);
+    expect(new Set(initial.quotes.map((quote) => quote.owner))).toEqual(new Set(['Sujith Kumar']));
     const visibleQuoteIds = new Set(initial.quotes.map((quote) => quote.id));
     expect(initial.alerts.every((alert) => visibleQuoteIds.has(alert.quoteId))).toBe(true);
 
@@ -98,12 +101,23 @@ describe.runIf(Boolean(databaseUrl))('PostgreSQL end-to-end flow', () => {
 
     const manager = await login(app, 'manager@dealflow360.demo', process.env.DEMO_MANAGER_PASSWORD);
     const managerData = (await (await request(app, '/api/bootstrap', { auth: manager })).json()).data;
+    expect(new Set(managerData.approvals.map((approval) => approval.stage))).toEqual(new Set(['manager']));
+    expect(managerData.fulfillment).toEqual([]);
+    expect(managerData.subscriptions).toEqual([]);
+    expect(managerData.invoices).toEqual([]);
+    expect(managerData.payments).toEqual([]);
+    expect(managerData.teams).toEqual([]);
     const managerApproval = managerData.approvals.find((approval) => approval.quoteId === quote.id);
     expect(managerApproval).toBeTruthy();
     expect((await request(app, `/api/approvals/${managerApproval.id}/decision`, { method: 'POST', auth: manager, body: { decision: 'approve' } })).status).toBe(200);
 
     const finance = await login(app, 'finance@dealflow360.demo', process.env.DEMO_FINANCE_PASSWORD);
     const financeData = (await (await request(app, '/api/bootstrap', { auth: finance })).json()).data;
+    expect(new Set(financeData.approvals.map((approval) => approval.stage))).toEqual(new Set(['finance']));
+    expect(financeData.teams).toEqual([]);
+    const financeVisibleDraft = financeData.quotes.find((item) => item.status === 'draft');
+    expect(financeVisibleDraft).toBeTruthy();
+    expect((await request(app, `/api/quotes/${financeVisibleDraft.id}/submit`, { method: 'POST', auth: finance })).status).toBe(403);
     const financeApproval = financeData.approvals.find((approval) => approval.quoteId === quote.id);
     expect(financeApproval).toBeTruthy();
     expect((await request(app, `/api/approvals/${financeApproval.id}/decision`, { method: 'POST', auth: finance, body: { decision: 'approve' } })).status).toBe(200);

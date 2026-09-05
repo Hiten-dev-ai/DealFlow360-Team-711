@@ -544,6 +544,11 @@ export function registerDomainRoutes(app, { store, config, auth }) {
     const unavailable = dbRequired(c, store);
     if (unavailable) return unavailable;
     const current = c.get("auth");
+    if (!["admin", "sales_rep", "sales_manager"].includes(current.role))
+      return c.json(
+        { error: "You cannot submit quotations.", code: "FORBIDDEN" },
+        403,
+      );
     const quoteId = c.req.param("id");
     try {
       const result = await store.transaction(async (client) => {
