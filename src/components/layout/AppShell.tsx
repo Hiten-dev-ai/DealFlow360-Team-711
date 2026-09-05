@@ -115,11 +115,27 @@ export function AppShell({ activeView, children, user, resolvedTheme, notificati
   const filteredNotifications = notificationPreferences.priorityOnly ? notifications.filter((item) => item.priority) : notifications;
   const searchInput = useRef<HTMLInputElement>(null);
   const searchDialogInput = useRef<HTMLInputElement>(null);
+  const searchOpening = useRef(false);
   const fullSearchResults = useMemo(() => searchWorkspace(searchQuery), [searchQuery]);
   const searchHasMore = fullSearchResults.length > 4;
 
+  const resetSearch = () => {
+    setSearchQuery('');
+    setSearchSuggestions([]);
+    setSearchActiveIndex(-1);
+    setSearchLoading(false);
+  };
+
+  const closeFullSearch = () => {
+    searchOpening.current = false;
+    setSearchOpen(false);
+    setSearchFocused(false);
+    resetSearch();
+  };
+
   const openFullSearch = () => {
     const showDialog = () => {
+      searchOpening.current = true;
       setSearchOpen(true);
       setSearchFocused(false);
       setSearchActiveIndex(-1);
@@ -164,7 +180,10 @@ export function AppShell({ activeView, children, user, resolvedTheme, notificati
 
   useEffect(() => {
     if (!searchOpen) return;
-    window.requestAnimationFrame(() => searchDialogInput.current?.focus());
+    window.requestAnimationFrame(() => {
+      searchDialogInput.current?.focus();
+      searchOpening.current = false;
+    });
   }, [searchOpen]);
 
   useEffect(() => {
@@ -188,9 +207,7 @@ export function AppShell({ activeView, children, user, resolvedTheme, notificati
     searchDialogInput.current?.blur();
     navigate(item.view);
     setSearchOpen(false);
-    setSearchQuery('');
-    setSearchSuggestions([]);
-    setSearchActiveIndex(-1);
+    resetSearch();
   };
 
   const handleInlineSearchKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
@@ -216,7 +233,7 @@ export function AppShell({ activeView, children, user, resolvedTheme, notificati
     }
     if (event.key === 'Escape') {
       setSearchFocused(false);
-      setSearchSuggestions([]);
+      resetSearch();
       searchInput.current?.blur();
     }
   };
@@ -287,7 +304,12 @@ export function AppShell({ activeView, children, user, resolvedTheme, notificati
             <div><span>{TEAM_NAME}</span><h1>{titles[activeView]}</h1></div>
           </div>
           <div className="topbar-search-wrap" onBlur={(event) => {
-            if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setSearchFocused(false);
+            if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+              setSearchFocused(false);
+              window.setTimeout(() => {
+                if (!searchOpening.current && !document.querySelector('.modal-card.search-modal')) resetSearch();
+              }, 0);
+            }
           }}>
             <div className={`topbar-search ${!searchOpen ? 'search-transition-source' : ''}`} role="search">
               <Search size={17} />
@@ -355,7 +377,7 @@ export function AppShell({ activeView, children, user, resolvedTheme, notificati
         </div>
       </aside>
 
-      <Modal open={searchOpen} title="Search workspace" eyebrow="Quick navigation" className="search-modal" onClose={() => { setSearchOpen(false); setSearchActiveIndex(-1); }}>
+      <Modal open={searchOpen} title="Search workspace" eyebrow="Quick navigation" className="search-modal" onClose={closeFullSearch}>
         <div className="command-search search-transition-target"><Search size={18} /><input ref={searchDialogInput} value={searchQuery} onChange={(event) => { setSearchQuery(event.target.value); setSearchActiveIndex(-1); }} onKeyDown={handleDialogSearchKeyDown} placeholder="Find a module..." aria-label="Search modules" /></div>
         <div className="command-results">
           {fullSearchResults.length === 0 && <p className="compact-empty"><Activity size={18} /> No matching module.</p>}
