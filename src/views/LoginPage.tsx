@@ -1,10 +1,9 @@
 import { FormEvent, useState } from 'react';
 import { ArrowRight, Eye, EyeOff, LockKeyhole, Mail, Workflow } from 'lucide-react';
 import { APP_DESCRIPTION, APP_NAME } from '../app-meta';
-import { authenticateDummyAccount, type DummyAccount } from '../lib/dummy-accounts';
 
 interface LoginPageProps {
-  onAuthenticated: (account: DummyAccount) => void;
+  onAuthenticated: (email: string, password: string) => Promise<void>;
 }
 
 export function LoginPage({ onAuthenticated }: LoginPageProps) {
@@ -14,17 +13,16 @@ export function LoginPage({ onAuthenticated }: LoginPageProps) {
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  const submit = (event: FormEvent<HTMLFormElement>) => {
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setSubmitting(true);
     setError('');
-    const account = authenticateDummyAccount(email, password);
-    if (!account) {
-      setError('Email or password is incorrect.');
+    try {
+      await onAuthenticated(email, password);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Email or password is incorrect.');
       setSubmitting(false);
-      return;
     }
-    onAuthenticated(account);
   };
 
   return (

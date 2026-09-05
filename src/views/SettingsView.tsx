@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ArrowLeft, Bell, Check, ChevronRight, Monitor, Moon, Palette, Sun, UserRound } from 'lucide-react';
-import type { DummyAccount } from '../lib/dummy-accounts';
+import type { SessionUser } from '../lib/api';
 import type { NotificationPreferences } from '../lib/preferences';
 
 export type ThemeMode = 'light' | 'dark' | 'system';
@@ -8,7 +8,7 @@ export type Accent = 'blue' | 'green' | 'amber' | 'violet';
 export type SettingsCategory = 'profile' | 'appearance' | 'notifications';
 
 interface SettingsViewProps {
-  user: DummyAccount;
+  user: SessionUser;
   theme: ThemeMode;
   accent: Accent;
   notificationPreferences: NotificationPreferences;
@@ -115,7 +115,7 @@ function SettingsHeader({ eyebrow, title }: { eyebrow: string; title: string }) 
   return <div className="settings-heading"><span>{eyebrow}</span><h2>{title}</h2></div>;
 }
 
-function ProfileSettings({ user }: { user: DummyAccount }) {
+function ProfileSettings({ user }: { user: SessionUser }) {
   return <div className="settings-panel"><SettingsHeader eyebrow="Deal workspace" title="Profile" /><div className="settings-card"><div className="profile-summary"><span className="profile-avatar large">{user.fullName.split(' ').map((part) => part[0]).join('').slice(0, 2)}</span><div><strong>{user.fullName}</strong><span>{user.email}</span></div></div><div className="settings-field-grid"><label><span>Display name</span><input value={user.fullName} readOnly /></label><label><span>Email</span><input value={user.email} readOnly /></label><label><span>Workspace</span><input value="DealFlow360 / Team 711" readOnly /></label></div></div></div>;
 }
 

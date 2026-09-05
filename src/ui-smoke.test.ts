@@ -15,7 +15,7 @@ describe('UI smoke identities', () => {
   it('contains every required workspace tab', () => {
     expect(APP_VIEW_IDS).toEqual([
       'dashboard', 'quotations', 'approvals', 'fulfillment', 'subscriptions',
-      'invoices', 'health', 'reports', 'settings',
+      'invoices', 'health', 'reports', 'teams', 'settings',
     ]);
   });
 

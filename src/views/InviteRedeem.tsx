@@ -1,0 +1,9 @@
+import { useState, type FormEvent } from 'react';
+import { ArrowRight, Workflow } from 'lucide-react';
+import { apiFetch } from '../lib/api';
+
+export function InviteRedeem() {
+  const [error, setError] = useState(''); const [complete, setComplete] = useState(false);
+  const submit = async (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); const form = new FormData(event.currentTarget); const token = new URLSearchParams(location.search).get('token'); try { await apiFetch('/api/invitations/redeem', { method: 'POST', body: JSON.stringify({ token, password: form.get('password') }) }); setComplete(true); history.replaceState({}, '', '/'); } catch (caught) { setError(caught instanceof Error ? caught.message : 'Could not accept invitation.'); } };
+  return <main className="login-page"><section className="login-story"><div className="brand-lockup"><span className="brand-mark"><Workflow size={22} /></span><strong>DealFlow360</strong></div><div className="login-story-copy"><h1>Join the flow.</h1><p>Secure access to your sales workspace.</p></div></section><section className="login-surface"><div className="login-card">{complete ? <div className="login-heading"><h2>Account ready</h2><span>You can now sign in.</span><button type="button" className="login-submit" onClick={() => location.assign('/')}>Continue <ArrowRight size={18} /></button></div> : <><div className="login-heading"><h2>Accept invitation</h2><span>Create a password to continue.</span></div><form className="login-form" onSubmit={submit}><label htmlFor="invite-password">Password</label><div className="field-shell"><input id="invite-password" name="password" type="password" minLength={12} autoComplete="new-password" required /></div>{error && <p className="login-error">{error}</p>}<button type="submit" className="login-submit">Create account <ArrowRight size={18} /></button></form></>}</div></section></main>;
+}
