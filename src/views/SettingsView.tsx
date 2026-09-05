@@ -4,7 +4,7 @@ import type { DummyAccount } from '../lib/dummy-accounts';
 import type { NotificationPreferences } from '../lib/preferences';
 
 export type ThemeMode = 'light' | 'dark' | 'system';
-export type Accent = 'blue' | 'teal' | 'slate';
+export type Accent = 'blue' | 'green' | 'amber' | 'violet';
 type SettingsCategory = 'profile' | 'appearance' | 'notifications';
 
 interface SettingsViewProps {
@@ -22,13 +22,13 @@ const categoryGroups = [
   {
     label: 'Personal',
     items: [
-      { id: 'profile' as const, label: 'Profile', detail: 'Identity and workspace', icon: UserRound },
-      { id: 'notifications' as const, label: 'Notifications', detail: 'Alerts and sound', icon: Bell },
+      { id: 'profile' as const, label: 'Profile', detail: 'Account and workspace', icon: UserRound },
+      { id: 'notifications' as const, label: 'Notifications', detail: 'Approvals and deal alerts', icon: Bell },
     ],
   },
   {
     label: 'Personalise',
-    items: [{ id: 'appearance' as const, label: 'Appearance', detail: 'Theme and colour', icon: Palette }],
+    items: [{ id: 'appearance' as const, label: 'Appearance', detail: 'Workspace theme', icon: Palette }],
   },
 ];
 
@@ -104,15 +104,15 @@ function SettingsHeader({ eyebrow, title }: { eyebrow: string; title: string }) 
 }
 
 function ProfileSettings({ user }: { user: DummyAccount }) {
-  return <div className="settings-panel"><SettingsHeader eyebrow="Personal" title="Profile" /><div className="settings-card"><div className="profile-summary"><span className="profile-avatar large">{user.fullName.split(' ').map((part) => part[0]).join('').slice(0, 2)}</span><div><strong>{user.fullName}</strong><span>{user.email}</span></div></div><div className="settings-field-grid"><label><span>Display name</span><input value={user.fullName} readOnly /></label><label><span>Email</span><input value={user.email} readOnly /></label><label><span>Workspace</span><input value="DealFlow360 · Team 711" readOnly /></label></div></div></div>;
+  return <div className="settings-panel"><SettingsHeader eyebrow="Deal workspace" title="Profile" /><div className="settings-card"><div className="profile-summary"><span className="profile-avatar large">{user.fullName.split(' ').map((part) => part[0]).join('').slice(0, 2)}</span><div><strong>{user.fullName}</strong><span>{user.email}</span></div></div><div className="settings-field-grid"><label><span>Display name</span><input value={user.fullName} readOnly /></label><label><span>Email</span><input value={user.email} readOnly /></label><label><span>Workspace</span><input value="DealFlow360 / Team 711" readOnly /></label></div></div></div>;
 }
 
 function AppearanceSettings({ theme, accent, onThemeChange, onAccentChange }: { theme: ThemeMode; accent: Accent; onThemeChange: (theme: ThemeMode) => void; onAccentChange: (accent: Accent) => void }) {
-  return <div className="settings-panel"><SettingsHeader eyebrow="Personalise" title="Appearance" /><div className="settings-card"><div className="setting-group"><h3>Accent colour</h3><div className="accent-grid">{(['blue', 'teal', 'slate'] as const).map((value) => <button key={value} type="button" className={accent === value ? 'active' : ''} onClick={() => onAccentChange(value)}><span className={`accent-swatch ${value}`} /><strong>{value === 'blue' ? 'Blue' : value === 'teal' ? 'Teal' : 'Slate'}</strong>{accent === value && <Check size={16} />}</button>)}</div></div><div className="setting-group"><h3>Theme</h3><div className="choice-grid">{([['dark', 'Dark mode', Moon], ['light', 'Light mode', Sun], ['system', 'System', Monitor]] as const).map(([value, label, Icon]) => <button key={value} type="button" className={theme === value ? 'active' : ''} onClick={() => onThemeChange(value)}><Icon size={19} /><strong>{label}</strong>{theme === value && <Check size={16} />}</button>)}</div></div></div></div>;
+  return <div className="settings-panel"><SettingsHeader eyebrow="Workspace" title="Appearance" /><div className="settings-card"><div className="setting-group"><h3>Deal colour</h3><div className="accent-grid">{(['blue', 'green', 'amber', 'violet'] as const).map((value) => <button key={value} type="button" className={accent === value ? 'active' : ''} onClick={() => onAccentChange(value)}><span className={`accent-swatch ${value}`} /><strong>{value[0].toUpperCase() + value.slice(1)}</strong>{accent === value && <Check size={16} />}</button>)}</div></div><div className="setting-group"><h3>Theme</h3><div className="choice-grid">{([['dark', 'Dark mode', Moon], ['light', 'Light mode', Sun], ['system', 'System', Monitor]] as const).map(([value, label, Icon]) => <button key={value} type="button" className={theme === value ? 'active' : ''} onClick={() => onThemeChange(value)}><Icon size={19} /><strong>{label}</strong>{theme === value && <Check size={16} />}</button>)}</div></div></div></div>;
 }
 
 function NotificationSettings({ preferences, onChange }: { preferences: NotificationPreferences; onChange: (next: Partial<NotificationPreferences>) => void }) {
-  return <div className="settings-panel"><SettingsHeader eyebrow="Personal" title="Notifications" /><div className="settings-card"><div className="setting-group"><h3>Delivery</h3><div className="toggle-list"><ToggleRow label="Desktop banner alerts" description="Show banners" checked={preferences.desktopAlerts} onChange={(desktopAlerts) => onChange({ desktopAlerts })} /><ToggleRow label="Sound notifications" description="Play alert sounds" checked={preferences.soundAlerts} onChange={(soundAlerts) => onChange({ soundAlerts })} /><ToggleRow label="Priority-only mode" description="Only high-priority alerts" checked={preferences.priorityOnly} onChange={(priorityOnly) => onChange({ priorityOnly })} /></div></div></div></div>;
+  return <div className="settings-panel"><SettingsHeader eyebrow="Deal alerts" title="Notifications" /><div className="settings-card"><div className="setting-group"><h3>Delivery</h3><div className="toggle-list"><ToggleRow label="Desktop alerts" description="Show deal updates" checked={preferences.desktopAlerts} onChange={(desktopAlerts) => onChange({ desktopAlerts })} /><ToggleRow label="Alert sounds" description="Sound for urgent events" checked={preferences.soundAlerts} onChange={(soundAlerts) => onChange({ soundAlerts })} /><ToggleRow label="Priority only" description="Approvals and risks only" checked={preferences.priorityOnly} onChange={(priorityOnly) => onChange({ priorityOnly })} /></div></div></div></div>;
 }
 
 function ToggleRow({ label, description, checked, onChange }: { label: string; description: string; checked: boolean; onChange: (checked: boolean) => void }) {

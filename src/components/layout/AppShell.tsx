@@ -185,7 +185,7 @@ export function AppShell({ activeView, children, user, resolvedTheme, notificati
             <button type="button" className={`topbar-icon ${activeView === 'settings' ? 'selected' : ''}`} onClick={() => navigate('settings')} aria-label="Settings"><Settings size={19} /></button>
           </div>
         </header>
-        <main className="workspace-content" key={activeView}>{children}</main>
+        <main className={`workspace-content ${activeView === 'settings' ? 'settings-workspace-content' : ''}`} key={activeView}>{children}</main>
       </div>
 
       <button type="button" className={`action-center-overlay ${notificationsOpen ? 'open' : ''}`} aria-label="Close notifications" tabIndex={notificationsOpen ? 0 : -1} onClick={() => setNotificationsOpen(false)} />

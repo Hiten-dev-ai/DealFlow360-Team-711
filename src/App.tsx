@@ -17,13 +17,21 @@ import {
 
 const USER_SESSION_KEY = 'dealflow360.demo.user';
 const NOTIFICATION_PREFERENCES_KEY = 'dealflow360.notification-preferences';
+const ACCENTS: readonly Accent[] = ['blue', 'green', 'amber', 'violet'];
+
+function loadAccent(): Accent {
+  const saved = localStorage.getItem('dealflow360.accent');
+  if (saved === 'teal') return 'green';
+  if (saved === 'slate') return 'violet';
+  return ACCENTS.includes(saved as Accent) ? saved as Accent : 'blue';
+}
 
 function App() {
   const [user, setUser] = useState<DummyAccount | null>(() => findDummyAccount(sessionStorage.getItem(USER_SESSION_KEY)));
   const [activeView, setActiveView] = useState<AppView>('dashboard');
   const [lastWorkspaceView, setLastWorkspaceView] = useState<AppView>('dashboard');
   const [theme, setTheme] = useState<ThemeMode>(() => (localStorage.getItem('dealflow360.theme') as ThemeMode | null) ?? 'dark');
-  const [accent, setAccent] = useState<Accent>(() => (localStorage.getItem('dealflow360.accent') as Accent | null) ?? 'blue');
+  const [accent, setAccent] = useState<Accent>(loadAccent);
   const [notificationPreferences, setNotificationPreferences] = useState<NotificationPreferences>(() => {
     try {
       return { ...DEFAULT_NOTIFICATION_PREFERENCES, ...JSON.parse(localStorage.getItem(NOTIFICATION_PREFERENCES_KEY) ?? '{}') };
