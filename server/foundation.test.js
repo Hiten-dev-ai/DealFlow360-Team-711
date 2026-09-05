@@ -21,7 +21,7 @@ async function createTestApp() {
     email: 'owner@dealflow.test',
     fullName: 'Hiten',
     passwordHash: await hashPassword('correct horse battery staple'),
-    roles: ['owner'],
+    roles: ['admin'],
   });
   return { ...createApp({ config, store }), store };
 }
@@ -49,30 +49,30 @@ describe('backend foundation', () => {
 
     const session = await app.request('/api/auth/session', { headers: { Cookie: cookie } });
     expect(session.status).toBe(200);
-    await expect(session.json()).resolves.toMatchObject({ authenticated: true, user: { activeRole: 'owner', email: 'owner@dealflow.test' } });
+    await expect(session.json()).resolves.toMatchObject({ authenticated: true, user: { activeRole: 'admin', email: 'owner@dealflow.test' } });
   });
 
   it('rejects invalid credentials and invalid input', async () => {
     const { app } = await createTestApp();
     const invalid = await app.request('/api/auth/login', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', Origin: 'http://127.0.0.1:4173' },
       body: JSON.stringify({ email: 'owner@dealflow.test', password: 'wrong password here' }),
     });
     expect(invalid.status).toBe(401);
 
     const malformed = await app.request('/api/auth/login', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', Origin: 'http://127.0.0.1:4173' },
       body: JSON.stringify({ email: 'not-an-email', password: 'short' }),
     });
     expect(malformed.status).toBe(400);
   });
 
   it('keeps role capabilities explicit', () => {
-    expect(hasCapability('owner', 'roles.manage')).toBe(true);
-    expect(hasCapability('admin', 'roles.manage')).toBe(false);
-    expect(hasCapability('operator', 'inventory.write')).toBe(true);
-    expect(hasCapability('operator', 'inventory.delete')).toBe(false);
+    expect(hasCapability('admin', 'users.manage')).toBe(true);
+    expect(hasCapability('sales_manager', 'approvals.manager')).toBe(true);
+    expect(hasCapability('sales_rep', 'approvals.manager')).toBe(false);
+    expect(hasCapability('finance_ops', 'billing.manage')).toBe(true);
   });
 });

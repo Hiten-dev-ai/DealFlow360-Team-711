@@ -1,30 +1,29 @@
-export const ROLES = Object.freeze(['owner', 'admin', 'operator']);
+export const ROLES = Object.freeze(['admin', 'sales_rep', 'sales_manager', 'finance_ops']);
 
 export const ROLE_CAPABILITIES = Object.freeze({
-  owner: Object.freeze([
-    'workspace.read',
-    'inventory.read',
-    'inventory.write',
-    'inventory.delete',
-    'pipeline.read',
-    'pipeline.write',
-    'roles.manage',
-    'settings.manage',
-  ]),
   admin: Object.freeze([
     'workspace.read',
-    'inventory.read',
-    'inventory.write',
-    'inventory.delete',
-    'pipeline.read',
-    'pipeline.write',
+    'quotes.read.all', 'quotes.write.all', 'quotes.submit',
+    'approvals.manager', 'approvals.finance',
+    'fulfillment.manage', 'billing.manage', 'reports.read.all',
+    'catalog.manage', 'teams.manage', 'users.manage',
     'settings.manage',
   ]),
-  operator: Object.freeze([
+  sales_rep: Object.freeze([
     'workspace.read',
-    'inventory.read',
-    'inventory.write',
-    'pipeline.read',
+    'quotes.read.own', 'quotes.write.own', 'quotes.submit',
+    'portal_links.create', 'reports.read.own', 'settings.manage',
+  ]),
+  sales_manager: Object.freeze([
+    'workspace.read',
+    'quotes.read.team', 'quotes.write.team', 'quotes.submit',
+    'approvals.manager', 'portal_links.create', 'reports.read.team',
+    'settings.manage',
+  ]),
+  finance_ops: Object.freeze([
+    'workspace.read',
+    'quotes.read.all', 'approvals.finance',
+    'fulfillment.manage', 'billing.manage', 'reports.read.all',
     'settings.manage',
   ]),
 });

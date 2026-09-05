@@ -10,8 +10,14 @@ export function getConfig(env = process.env) {
     workspaceId: env.WORKSPACE_ID ?? DEFAULT_WORKSPACE_ID,
     databaseUrl: env.DATABASE_URL ?? null,
     sessionCookieName: 'dealflow_session',
+    portalCookieName: 'dealflow_portal',
     sessionInactivityMs: 30 * 60 * 1000,
     sessionAbsoluteMs: 8 * 60 * 60 * 1000,
+    invitationMs: 48 * 60 * 60 * 1000,
+    portalLinkMs: 30 * 60 * 1000,
+    releaseId: env.RELEASE_ID ?? 'development',
+    smtpUrl: env.SMTP_URL ?? null,
+    mailFrom: env.MAIL_FROM ?? 'DealFlow360 <no-reply@dealflow360.athergrid.dev>',
     secureCookies: nodeEnv === 'production',
   };
 }

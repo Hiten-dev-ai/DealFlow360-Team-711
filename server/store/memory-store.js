@@ -4,10 +4,11 @@ export class MemoryStore {
     this.users = new Map();
     this.sessions = new Map();
     this.auditEvents = [];
+    this.isMemory = true;
   }
 
-  async createUser({ id, email, fullName, passwordHash, roles }) {
-    const user = { id, email: email.toLowerCase(), fullName, passwordHash, roles, workspaceId: this.workspaceId };
+  async createUser({ id, email, fullName, passwordHash, roles, teamId = null }) {
+    const user = { id, email: email.toLowerCase(), fullName, passwordHash, roles, teamId, workspaceId: this.workspaceId };
     this.users.set(user.email, user);
     return user;
   }
