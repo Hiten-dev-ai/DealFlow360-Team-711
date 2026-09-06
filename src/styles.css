@@ -612,6 +612,8 @@ button.record-row { cursor: pointer; }
 .row-action { min-height: 34px; padding: 0 10px; white-space: nowrap; font-size: .66rem; }
 .status-pill { display: inline-flex; width: max-content; align-items: center; min-height: 27px; padding: 0 10px; border: 1px solid var(--border); border-radius: 999px; color: var(--text-muted); background: var(--surface-soft); font-size: .7rem; font-weight: 800; white-space: nowrap; }
 .status-pill.success { color: #18a56b; border-color: rgba(24,165,107,.25); background: rgba(24,165,107,.1); }
+.status-pill.approved { color: #7c3aed; border-color: rgba(124,58,237,.3); background: rgba(124,58,237,.12); }
+[data-theme="dark"] .status-pill.approved { color: #c4b5fd; border-color: rgba(167,139,250,.36); background: rgba(124,58,237,.2); }
 .status-pill.warning { color: #d89716; border-color: rgba(216,151,22,.27); background: rgba(216,151,22,.1); }
 .status-pill.danger { color: var(--danger); border-color: rgba(251,113,133,.28); background: rgba(251,113,133,.1); }
 .status-pill.info { color: #3b9fdf; border-color: rgba(59,159,223,.28); background: rgba(59,159,223,.1); }
@@ -680,6 +682,10 @@ button.record-row { cursor: pointer; }
 .detail-metrics > div { display: grid; gap: 6px; padding: 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-soft); }
 .detail-metrics span { color: var(--text-muted); font-size: .72rem; }
 .detail-metrics strong { font-size: 1.04rem; }
+.detail-metrics .risk-band { width: max-content; padding: 3px 7px; border-radius: 999px; font-size: .61rem; font-weight: 800; }
+.risk-band.low { color: #16845a; background: rgba(24,165,107,.11); }
+.risk-band.review { color: #b8790d; background: rgba(216,151,22,.12); }
+.risk-band.high { color: var(--danger); background: rgba(251,113,133,.12); }
 .suggestion-card { display: grid; grid-template-columns: 28px 1fr auto; align-items: center; gap: 10px; padding: 14px; border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--border)); border-radius: 13px; background: var(--accent-soft); }
 .suggestion-card > svg { color: var(--accent); }
 .suggestion-card strong { font-size: .76rem; }

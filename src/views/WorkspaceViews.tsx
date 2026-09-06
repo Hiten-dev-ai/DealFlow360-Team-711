@@ -49,6 +49,12 @@ const titleCase = (value: unknown) =>
   text(value)
     .replaceAll("_", " ")
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
+const riskBand = (value: unknown) => {
+  const score = amount(value);
+  if (score >= 70) return { label: "High", tone: "high" };
+  if (score >= 40) return { label: "Review", tone: "review" };
+  return { label: "Low", tone: "low" };
+};
 
 const QUOTE_STATUS_OPTIONS: SelectOption[] = [
   { value: "all", label: "All statuses" },
@@ -566,8 +572,9 @@ export function QuotationsView({ focusId, focusRequest }: SearchFocusProps) {
                 <strong>{formatMoney(selected.totalMinor)}</strong>
               </div>
               <div>
-                <span>Risk</span>
+                <span>Blended risk</span>
                 <strong>{text(selected.riskScore)}/100</strong>
+                <small className={`risk-band ${riskBand(selected.riskScore).tone}`}>{riskBand(selected.riskScore).label}</small>
               </div>
               <div>
                 <span>Live margin</span>
@@ -794,6 +801,7 @@ export function ApprovalsView({ focusId, focusRequest }: SearchFocusProps) {
               <div>
                 <i style={{ width: `${text(selected.riskScore)}%` }} />
               </div>
+              <p>Discount 45% · Margin 30% · Deal value 15% · Customer exposure 10%</p>
             </div>
             <div className="decision-reason">
               <strong>{titleCase(selected.stage)} decision</strong>

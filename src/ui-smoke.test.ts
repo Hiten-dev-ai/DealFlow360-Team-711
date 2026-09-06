@@ -27,7 +27,7 @@ describe('UI smoke coverage', () => {
 
   it('formats operational values consistently', () => {
     expect(formatCurrency(1240000)).toContain('12,40,000');
-    expect(statusTone('Approved')).toBe('success');
+    expect(statusTone('Approved')).toBe('approved');
     expect(statusTone('Overdue')).toBe('danger');
   });
 

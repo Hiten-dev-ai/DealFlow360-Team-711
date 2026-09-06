@@ -1,4 +1,4 @@
-export type Tone = 'neutral' | 'info' | 'warning' | 'success' | 'danger';
+export type Tone = 'neutral' | 'info' | 'warning' | 'success' | 'approved' | 'danger';
 
 export interface Quotation {
   id: string;
@@ -61,7 +61,8 @@ export function formatCurrency(value: number) {
 
 export function statusTone(status: string): Tone {
   const normalized = status.toLowerCase();
-  if (['approved', 'accepted', 'paid', 'active', 'ready', 'reserved', 'resolved'].includes(normalized)) return 'success';
+  if (normalized === 'approved') return 'approved';
+  if (['accepted', 'paid', 'active', 'ready', 'reserved', 'resolved'].includes(normalized)) return 'success';
   if (['overdue', 'rejected', 'backorder', 'high', 'cancelled'].includes(normalized)) return 'danger';
   if (['pending approval', 'pending manager', 'pending finance', 'negotiation', 'due', 'medium', 'paused'].includes(normalized)) return 'warning';
   if (['picking', 'in review', 'planned', 'partially paid'].includes(normalized)) return 'info';
