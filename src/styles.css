@@ -258,6 +258,7 @@ button:focus-visible, input:focus-visible { outline: 3px solid color-mix(in srgb
 .workspace-sidebar:hover { width: var(--sidebar-expanded); box-shadow: 16px 0 48px rgba(2, 6, 23, .24); }
 .sidebar-brand { min-height: 52px; padding: 2px 7px 13px; border-bottom: 1px solid var(--border); }
 .sidebar-logo { flex: 0 0 40px; width: 40px; height: 40px; border-radius: 12px; }
+.sidebar-app-icon { display: block; object-fit: cover; background: transparent; box-shadow: 0 8px 22px color-mix(in srgb, var(--accent) 20%, transparent); }
 .sidebar-brand-copy, .sidebar-item-label, .sidebar-section-label, .profile-copy, .sidebar-item-chevron, .logout-button {
   opacity: 0;
   transform: translateX(-7px);

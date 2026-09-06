@@ -37,7 +37,6 @@ import {
   UserRound,
   Users,
   WalletCards,
-  Workflow,
   X,
   type LucideIcon,
 } from "lucide-react";
@@ -706,9 +705,13 @@ export function AppShell({
         aria-label="Primary navigation"
       >
         <div className="sidebar-brand">
-          <span className="sidebar-logo">
-            <Workflow size={22} />
-          </span>
+          <img
+            className="sidebar-logo sidebar-app-icon"
+            src="/pwa-icon.svg"
+            alt=""
+            aria-hidden="true"
+            draggable={false}
+          />
           <span className="sidebar-brand-copy">
             <strong>{APP_NAME}</strong>
           </span>
