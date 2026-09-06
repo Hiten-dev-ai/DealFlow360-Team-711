@@ -36,6 +36,7 @@ flowchart LR
 ### Quotations and pricing
 
 - Product catalogue with one-time and recurring items
+- Admin product/category management with pricing, costs, lifecycle state, and per-warehouse stock
 - Customer tiers and category-level discount ceilings
 - Integer INR minor-unit calculations to avoid floating-point money errors
 - Server-calculated subtotal, discount, cost, margin, risk score, and approval route
@@ -158,7 +159,7 @@ PostgreSQL 17: 127.0.0.1:55432
 ```text
 src/
   components/       Application shell and reusable UI
-  views/            Quotations, approvals, fulfillment, billing, reports, settings
+  views/            Catalogue, quotations, approvals, fulfillment, billing, reports, settings
   lib/              API client, offline cache, workspace state, PWA lifecycle
   styles.css        Design system and responsive behavior
 server/
@@ -177,6 +178,7 @@ deploy/             Secret provisioning, isolated verification, release, rollbac
 | --- | --- |
 | Authentication | `/api/auth/login`, `/api/auth/session`, `/api/auth/logout` |
 | Access | `/api/invitations`, `/api/invitations/redeem`, `/api/admin/teams`, `/api/admin/teams/:id/members/:userId` |
+| Catalogue | `/api/admin/catalog`, `/api/admin/products`, `/api/admin/categories` |
 | Environment | `/api/admin/environment` |
 | Workspace | `/api/bootstrap`, `/api/search`, `/api/preferences`, `/api/notifications` |
 | Quotations | `/api/quotes`, `/api/quotes/:id/lines`, `/api/quotes/:id/submit` |

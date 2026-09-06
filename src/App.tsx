@@ -34,6 +34,7 @@ import { CustomerPortal } from "./views/CustomerPortal";
 import { ToastViewport } from "./components/ui/ToastViewport";
 import { InviteRedeem } from "./views/InviteRedeem";
 import { TeamsView } from "./views/TeamsView";
+import { CatalogView } from "./views/CatalogView";
 import {
   SettingsView,
   type Accent,
@@ -66,6 +67,8 @@ const EMPTY_WORKSPACE: WorkspaceData = {
   tiers: [],
   customers: [],
   catalog: [],
+  productCategories: [],
+  warehouses: [],
   preferences: { theme: "system", accent: "blue" },
 };
 
@@ -318,6 +321,7 @@ export default function App() {
     health: <DealHealthView focusId={recordTarget?.view === "health" ? recordTarget.id : null} focusRequest={recordTarget?.request} />,
     reports: <ReportsView />,
     teams: <TeamsView user={user} focusId={recordTarget?.view === "teams" ? recordTarget.id : null} focusRequest={recordTarget?.request} />,
+    catalog: <CatalogView focusId={recordTarget?.view === "catalog" ? recordTarget.id : null} focusRequest={recordTarget?.request} />,
     settings: (
       <SettingsView
         user={user}

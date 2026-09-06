@@ -7,7 +7,7 @@ describe('UI smoke coverage', () => {
   it('contains every required workspace tab', () => {
     expect(APP_VIEW_IDS).toEqual([
       'dashboard', 'quotations', 'approvals', 'fulfillment', 'subscriptions',
-      'invoices', 'health', 'reports', 'teams', 'settings',
+      'invoices', 'health', 'reports', 'catalog', 'teams', 'settings',
     ]);
   });
 
@@ -53,7 +53,9 @@ describe('UI smoke coverage', () => {
       teams: [{ id: 'team-1', name: 'Enterprise South', members: [] }],
       tiers: [],
       customers: [],
-      catalog: [],
+      catalog: [{ id: 'product-1', name: 'Cold Chain Monitor', sku: 'CCM-711', category: 'Hardware', billingType: 'one_time', active: true }],
+      productCategories: [{ id: 'category-1', name: 'Hardware' }],
+      warehouses: [{ id: 'warehouse-1', name: 'Main Warehouse' }],
       preferences: { theme: 'system', accent: 'blue' },
     };
 
@@ -67,5 +69,9 @@ describe('UI smoke coverage', () => {
     expect(searchWorkspace('enterprise south', 'admin', data)).toEqual(
       expect.arrayContaining([expect.objectContaining({ recordId: 'team-1', type: 'Team' })]),
     );
+    expect(searchWorkspace('ccm-711', 'admin', data)).toEqual(
+      expect.arrayContaining([expect.objectContaining({ recordId: 'product-1', type: 'Product' })]),
+    );
+    expect(searchWorkspace('ccm-711', 'sales_rep', data).some((item) => item.type === 'Product')).toBe(false);
   });
 });

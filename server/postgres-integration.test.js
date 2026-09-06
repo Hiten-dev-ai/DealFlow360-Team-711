@@ -45,6 +45,8 @@ describe.runIf(Boolean(databaseUrl))('PostgreSQL end-to-end flow', () => {
     expect(initial.payments).toEqual([]);
     expect(initial.teams).toEqual([]);
     expect(initial.tiers).toEqual([]);
+    expect(initial.productCategories).toEqual([]);
+    expect(initial.warehouses).toEqual([]);
     expect(initial.approvals).toEqual([]);
     expect(new Set(initial.quotes.map((quote) => quote.owner))).toEqual(new Set(['Sujith Kumar']));
     const visibleQuoteIds = new Set(initial.quotes.map((quote) => quote.id));
@@ -69,6 +71,39 @@ describe.runIf(Boolean(databaseUrl))('PostgreSQL end-to-end flow', () => {
     const updatedTier = (await updatedTierResponse.json()).data;
     expect(updatedTier).toMatchObject({ name: 'Integration Plus', overdueRisk: 18, discountCeilingBps: 800 });
     expect((await request(app, `/api/admin/tiers/${updatedTier.id}`, { method: 'DELETE', auth: admin, body: { expectedVersion: Number(updatedTier.version) } })).status).toBe(200);
+
+    expect((await request(app, '/api/admin/catalog', { auth: sales })).status).toBe(403);
+    const adminCatalogResponse = await request(app, '/api/admin/catalog', { auth: admin });
+    expect(adminCatalogResponse.status).toBe(200);
+    const adminCatalog = (await adminCatalogResponse.json()).data;
+    expect(adminCatalog.products.length).toBeGreaterThanOrEqual(16);
+    expect(adminCatalog.categories.length).toBeGreaterThanOrEqual(3);
+    expect(adminCatalog.warehouses.length).toBeGreaterThanOrEqual(3);
+    const createdCategoryResponse = await request(app, '/api/admin/categories', { method: 'POST', auth: admin, body: { name: 'Integration Products' } });
+    expect(createdCategoryResponse.status).toBe(201);
+    const createdCategory = (await createdCategoryResponse.json()).data;
+    const warehouse = adminCatalog.warehouses[0];
+    const createdProductResponse = await request(app, '/api/admin/products', { method: 'POST', auth: admin, body: {
+      name: 'Integration Product', sku: 'INT-PRODUCT-711', categoryId: createdCategory.id,
+      billingType: 'one_time', cadence: null, priceMinor: 250000, costMinor: 125000,
+      stock: [{ warehouseId: warehouse.id, availableQuantity: 25, expectedVersion: 0 }],
+    } });
+    expect(createdProductResponse.status).toBe(201);
+    const createdProduct = (await createdProductResponse.json()).data;
+    expect(createdProduct).toMatchObject({ name: 'Integration Product', sku: 'INT-PRODUCT-711', active: true });
+    expect(createdProduct.stock.find((level) => level.warehouseId === warehouse.id)).toMatchObject({ availableQuantity: 25, reservedQuantity: 0 });
+    const updatedProductResponse = await request(app, `/api/admin/products/${createdProduct.id}`, { method: 'PATCH', auth: admin, body: {
+      name: 'Integration Product Plus', sku: 'INT-PRODUCT-711', categoryId: createdCategory.id,
+      billingType: 'recurring', cadence: 'monthly', priceMinor: 300000, costMinor: 140000, active: true,
+      expectedVersion: Number(createdProduct.version),
+      stock: createdProduct.stock.map((level) => ({ warehouseId: level.warehouseId, availableQuantity: level.warehouseId === warehouse.id ? 30 : level.availableQuantity, expectedVersion: level.version })),
+    } });
+    expect(updatedProductResponse.status).toBe(200);
+    const updatedProduct = (await updatedProductResponse.json()).data;
+    expect(updatedProduct).toMatchObject({ name: 'Integration Product Plus', billingType: 'recurring', cadence: 'monthly', priceMinor: 300000 });
+    expect((await request(app, `/api/admin/products/${updatedProduct.id}`, { method: 'DELETE', auth: admin, body: { expectedVersion: Number(updatedProduct.version) } })).status).toBe(200);
+    expect((await request(app, `/api/admin/categories/${createdCategory.id}`, { method: 'DELETE', auth: admin, body: { expectedVersion: Number(createdCategory.version), replacementCategoryId: adminCatalog.categories[0].id } })).status).toBe(200);
+    await store.query('DELETE FROM products WHERE id=$1', [updatedProduct.id]);
 
     const createdTeamResponse = await request(app, '/api/admin/teams', { method: 'POST', auth: admin, body: { name: 'Integration Team' } });
     expect(createdTeamResponse.status).toBe(201);

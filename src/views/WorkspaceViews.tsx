@@ -481,7 +481,7 @@ export function QuotationsView({ focusId, focusRequest }: SearchFocusProps) {
             <CustomSelect
               name="productId"
               ariaLabel="Product"
-              options={data.catalog.map((product) => ({
+              options={data.catalog.filter((product) => product.active !== false).map((product) => ({
                 value: text(product.id),
                 label: text(product.name),
                 detail: `${text(product.sku)} · ${formatMoney(product.priceMinor)}`,

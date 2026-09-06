@@ -60,6 +60,39 @@ const addLineInput = z.object({
   discountBps: z.number().int().min(0).max(10_000).default(0),
   expectedVersion: z.number().int().positive(),
 });
+const stockInput = z.object({
+  warehouseId: uuid,
+  availableQuantity: z.number().int().min(0).max(10_000_000),
+  expectedVersion: z.number().int().min(0),
+});
+const productFields = z.object({
+  name: z.string().trim().min(2).max(120),
+  sku: z.string().trim().regex(/^[a-z0-9][a-z0-9._-]{1,39}$/i),
+  categoryId: uuid,
+  billingType: z.enum(["one_time", "recurring"]),
+  cadence: z.enum(["monthly", "quarterly", "yearly"]).nullable().optional(),
+  priceMinor: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
+  costMinor: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
+  stock: z.array(stockInput).max(50).default([]),
+});
+const productInput = productFields.superRefine((value, context) => {
+  if (value.billingType === "recurring" && !value.cadence)
+    context.addIssue({ code: "custom", path: ["cadence"], message: "Choose a billing cadence." });
+});
+const productUpdateInput = productFields.extend({
+  active: z.boolean(),
+  expectedVersion: z.number().int().positive(),
+}).superRefine((value, context) => {
+  if (value.billingType === "recurring" && !value.cadence)
+    context.addIssue({ code: "custom", path: ["cadence"], message: "Choose a billing cadence." });
+});
+const archiveProductInput = z.object({ expectedVersion: z.number().int().positive() });
+const categoryInput = z.object({ name: z.string().trim().min(2).max(80) });
+const categoryUpdateInput = categoryInput.extend({ expectedVersion: z.number().int().positive() });
+const deleteCategoryInput = z.object({
+  expectedVersion: z.number().int().positive(),
+  replacementCategoryId: uuid.optional(),
+});
 
 function number(value) {
   return Number(value ?? 0);
@@ -157,6 +190,107 @@ async function listCustomerTiers(store, workspaceId) {
     [workspaceId],
   );
   return result.rows;
+}
+
+async function listCatalogManagement(store, workspaceId) {
+  const [products, categories, warehouses] = await Promise.all([
+    store.query(
+      `SELECT p.id,p.sku,p.name,p.category_id AS "categoryId",pc.name AS category,
+        p.billing_type AS "billingType",p.cadence,p.price_minor AS "priceMinor",p.cost_minor AS "costMinor",
+        p.active,p.version,p.updated_at AS "updatedAt",
+        COALESCE((SELECT json_agg(json_build_object(
+          'warehouseId',w.id,'warehouse',w.name,'code',w.code,
+          'availableQuantity',COALESCE(i.available_quantity,0),
+          'reservedQuantity',COALESCE(i.reserved_quantity,0),
+          'version',COALESCE(i.version,0)
+        ) ORDER BY w.name)
+        FROM warehouses w LEFT JOIN inventory_levels i ON i.warehouse_id=w.id AND i.product_id=p.id
+        WHERE w.workspace_id=p.workspace_id AND w.active=true),'[]') AS stock
+       FROM products p JOIN product_categories pc ON pc.id=p.category_id
+       WHERE p.workspace_id=$1 ORDER BY p.active DESC,p.name`,
+      [workspaceId],
+    ),
+    store.query(
+      `SELECT pc.id,pc.name,pc.version,pc.updated_at AS "updatedAt",
+        count(p.id)::int AS "productCount",
+        (count(p.id) FILTER (WHERE p.active=true))::int AS "activeProductCount"
+       FROM product_categories pc LEFT JOIN products p ON p.category_id=pc.id
+       WHERE pc.workspace_id=$1 GROUP BY pc.id ORDER BY pc.name`,
+      [workspaceId],
+    ),
+    store.query(
+      `SELECT id,code,name,shipping_cost_minor AS "shippingCostMinor"
+       FROM warehouses WHERE workspace_id=$1 AND active=true ORDER BY name`,
+      [workspaceId],
+    ),
+  ]);
+  return {
+    products: products.rows.map((product) => ({
+      ...product,
+      priceMinor: number(product.priceMinor),
+      costMinor: number(product.costMinor),
+      version: number(product.version),
+      stock: (product.stock ?? []).map((level) => ({
+        ...level,
+        availableQuantity: number(level.availableQuantity),
+        reservedQuantity: number(level.reservedQuantity),
+        version: number(level.version),
+      })),
+    })),
+    categories: categories.rows.map((category) => ({ ...category, version: number(category.version) })),
+    warehouses: warehouses.rows.map((warehouse) => ({
+      ...warehouse,
+      shippingCostMinor: number(warehouse.shippingCostMinor),
+    })),
+  };
+}
+
+async function validateCatalogReferences(client, workspaceId, categoryId, stock) {
+  const category = await client.query(
+    "SELECT 1 FROM product_categories WHERE id=$1 AND workspace_id=$2",
+    [categoryId, workspaceId],
+  );
+  if (!category.rowCount)
+    throw Object.assign(new Error("Product category not found."), { status: 404, code: "CATEGORY_NOT_FOUND" });
+  const warehouseIds = [...new Set(stock.map((level) => level.warehouseId))];
+  if (warehouseIds.length !== stock.length)
+    throw Object.assign(new Error("Each warehouse can appear only once."), { status: 400, code: "DUPLICATE_WAREHOUSE" });
+  if (warehouseIds.length) {
+    const warehouses = await client.query(
+      "SELECT id FROM warehouses WHERE workspace_id=$1 AND active=true AND id=ANY($2::uuid[])",
+      [workspaceId, warehouseIds],
+    );
+    if (warehouses.rowCount !== warehouseIds.length)
+      throw Object.assign(new Error("One or more warehouses are unavailable."), { status: 400, code: "WAREHOUSE_NOT_FOUND" });
+  }
+}
+
+async function saveProductStock(client, productId, stock) {
+  for (const level of stock) {
+    if (level.expectedVersion === 0) {
+      const inserted = await client.query(
+        `INSERT INTO inventory_levels(warehouse_id,product_id,available_quantity)
+         VALUES($1,$2,$3) ON CONFLICT(warehouse_id,product_id) DO NOTHING RETURNING version`,
+        [level.warehouseId, productId, level.availableQuantity],
+      );
+      if (inserted.rowCount) continue;
+    }
+    const updated = await client.query(
+      `UPDATE inventory_levels SET available_quantity=$3,version=version+1
+       WHERE warehouse_id=$1 AND product_id=$2 AND version=$4 AND reserved_quantity<=$3 RETURNING version`,
+      [level.warehouseId, productId, level.availableQuantity, level.expectedVersion],
+    );
+    if (!updated.rowCount) {
+      const existing = (await client.query(
+        `SELECT reserved_quantity AS "reservedQuantity",version FROM inventory_levels
+         WHERE warehouse_id=$1 AND product_id=$2`,
+        [level.warehouseId, productId],
+      )).rows[0];
+      if (existing && number(existing.reservedQuantity) > level.availableQuantity)
+        throw Object.assign(new Error("Available stock cannot be lower than reserved stock."), { status: 409, code: "STOCK_RESERVED" });
+      throw Object.assign(new Error("Stock changed on another device. Refresh and try again."), { status: 409, code: "VERSION_CONFLICT" });
+    }
+  }
 }
 
 async function writeChange(
@@ -330,6 +464,7 @@ export function registerDomainRoutes(app, { store, config, auth }) {
       tiers,
       customers,
       catalog,
+      catalogManagement,
       preferences,
       cursor,
     ] = await Promise.all([
@@ -393,6 +528,9 @@ export function registerDomainRoutes(app, { store, config, auth }) {
         `SELECT p.id,p.sku,p.name,p.billing_type AS "billingType",p.cadence,p.price_minor AS "priceMinor",p.cost_minor AS "costMinor",pc.name AS category FROM products p JOIN product_categories pc ON pc.id=p.category_id WHERE p.workspace_id=$1 AND p.active=true ORDER BY p.name`,
         [current.user.workspaceId],
       ),
+      current.role === "admin"
+        ? listCatalogManagement(store, current.user.workspaceId)
+        : Promise.resolve({ products: [], categories: [], warehouses: [] }),
       store.query(
         'SELECT theme,accent,desktop_alerts AS "desktopAlerts",sound_alerts AS "soundAlerts",priority_only AS "priorityOnly",dnd FROM user_preferences WHERE user_id=$1',
         [current.user.id],
@@ -415,7 +553,9 @@ export function registerDomainRoutes(app, { store, config, auth }) {
         teams: teams.rows,
         tiers,
         customers: customers.rows,
-        catalog: catalog.rows,
+        catalog: current.role === "admin" ? catalogManagement.products : catalog.rows,
+        productCategories: catalogManagement.categories,
+        warehouses: catalogManagement.warehouses,
         preferences: preferences.rows[0] ?? { theme: "system", accent: "blue" },
       },
       sync: {
@@ -1510,7 +1650,7 @@ export function registerDomainRoutes(app, { store, config, auth }) {
     const scope = quoteScope(current, 3);
     const pattern = `%${query.replaceAll("%", "\\%").replaceAll("_", "\\_")}%`;
     const result = await store.query(
-      `SELECT * FROM (SELECT q.id,'quote' AS type,'Q-'||lpad(q.quote_number::text,4,'0')||' · '||c.name AS label,q.status AS context,q.updated_at FROM quotes q JOIN customers c ON c.id=q.customer_id WHERE q.workspace_id=$1 AND (c.name ILIKE $2 OR q.quote_number::text ILIKE $2)${scope.sql} UNION ALL SELECT p.id,'product',p.name,p.sku,now() FROM products p WHERE p.workspace_id=$1 AND (p.name ILIKE $2 OR p.sku ILIKE $2)) matches ORDER BY updated_at DESC LIMIT 50`,
+      `SELECT * FROM (SELECT q.id,'quote' AS type,'Q-'||lpad(q.quote_number::text,4,'0')||' · '||c.name AS label,q.status AS context,q.updated_at FROM quotes q JOIN customers c ON c.id=q.customer_id WHERE q.workspace_id=$1 AND (c.name ILIKE $2 OR q.quote_number::text ILIKE $2)${scope.sql} UNION ALL SELECT p.id,'product',p.name,p.sku,now() FROM products p WHERE p.workspace_id=$1 AND p.active=true AND (p.name ILIKE $2 OR p.sku ILIKE $2)) matches ORDER BY updated_at DESC LIMIT 50`,
       [current.user.workspaceId, pattern, ...scope.params],
     );
     return c.json({ data: result.rows });
@@ -1586,6 +1726,220 @@ export function registerDomainRoutes(app, { store, config, auth }) {
       ],
     );
     return c.json({ data: result.rows[0] });
+  });
+
+  app.get("/api/admin/catalog", auth.capability("catalog.manage"), async (c) => {
+    const unavailable = dbRequired(c, store);
+    if (unavailable) return unavailable;
+    return c.json({ data: await listCatalogManagement(store, c.get("auth").user.workspaceId) });
+  });
+
+  app.post("/api/admin/products", auth.capability("catalog.manage"), async (c) => {
+    const unavailable = dbRequired(c, store);
+    if (unavailable) return unavailable;
+    const parsed = await jsonBody(c, productInput);
+    if (parsed.error)
+      return c.json({ error: "Enter valid product details.", code: "INVALID_INPUT", details: parsed.error.flatten() }, 400);
+    const current = c.get("auth");
+    try {
+      const productId = await store.transaction(async (client) => {
+        await validateCatalogReferences(client, current.user.workspaceId, parsed.data.categoryId, parsed.data.stock);
+        const product = await client.query(
+          `INSERT INTO products(workspace_id,category_id,sku,name,billing_type,cadence,price_minor,cost_minor)
+           VALUES($1,$2,upper($3),$4,$5,$6,$7,$8) RETURNING id,version`,
+          [
+            current.user.workspaceId,
+            parsed.data.categoryId,
+            parsed.data.sku,
+            parsed.data.name,
+            parsed.data.billingType,
+            parsed.data.billingType === "recurring" ? parsed.data.cadence : null,
+            parsed.data.priceMinor,
+            parsed.data.costMinor,
+          ],
+        );
+        await saveProductStock(client, product.rows[0].id, parsed.data.stock);
+        await writeChange(client, current.user.workspaceId, "product", product.rows[0].id, product.rows[0].version);
+        await writeAudit(client, current, "product.created", { productId: product.rows[0].id, sku: parsed.data.sku.toUpperCase() });
+        return product.rows[0].id;
+      });
+      const catalog = await listCatalogManagement(store, current.user.workspaceId);
+      return c.json({ data: catalog.products.find((product) => product.id === productId) }, 201);
+    } catch (error) {
+      const duplicate = error.code === "23505";
+      return c.json(
+        { error: duplicate ? "A product with this SKU already exists." : error.message ?? "Could not create product.", code: duplicate ? "SKU_EXISTS" : error.code ?? "PRODUCT_CREATE_FAILED" },
+        duplicate ? 409 : error.status ?? 500,
+      );
+    }
+  });
+
+  app.patch("/api/admin/products/:id", auth.capability("catalog.manage"), async (c) => {
+    const unavailable = dbRequired(c, store);
+    if (unavailable) return unavailable;
+    const parsed = await jsonBody(c, productUpdateInput);
+    if (parsed.error)
+      return c.json({ error: "Enter valid product details.", code: "INVALID_INPUT", details: parsed.error.flatten() }, 400);
+    const current = c.get("auth");
+    try {
+      await store.transaction(async (client) => {
+        await validateCatalogReferences(client, current.user.workspaceId, parsed.data.categoryId, parsed.data.stock);
+        const product = await client.query(
+          `UPDATE products SET category_id=$3,sku=upper($4),name=$5,billing_type=$6,cadence=$7,
+             price_minor=$8,cost_minor=$9,active=$10,version=version+1,updated_at=now()
+           WHERE id=$1 AND workspace_id=$2 AND version=$11 RETURNING id,version`,
+          [
+            c.req.param("id"),
+            current.user.workspaceId,
+            parsed.data.categoryId,
+            parsed.data.sku,
+            parsed.data.name,
+            parsed.data.billingType,
+            parsed.data.billingType === "recurring" ? parsed.data.cadence : null,
+            parsed.data.priceMinor,
+            parsed.data.costMinor,
+            parsed.data.active,
+            parsed.data.expectedVersion,
+          ],
+        );
+        if (!product.rowCount)
+          throw Object.assign(new Error("Product changed on another device. Refresh and try again."), { status: 409, code: "VERSION_CONFLICT" });
+        await saveProductStock(client, product.rows[0].id, parsed.data.stock);
+        await writeChange(client, current.user.workspaceId, "product", product.rows[0].id, product.rows[0].version);
+        await writeAudit(client, current, "product.updated", { productId: product.rows[0].id });
+      });
+      const catalog = await listCatalogManagement(store, current.user.workspaceId);
+      return c.json({ data: catalog.products.find((product) => product.id === c.req.param("id")) });
+    } catch (error) {
+      const duplicate = error.code === "23505";
+      return c.json(
+        { error: duplicate ? "A product with this SKU already exists." : error.message ?? "Could not update product.", code: duplicate ? "SKU_EXISTS" : error.code ?? "PRODUCT_UPDATE_FAILED" },
+        duplicate ? 409 : error.status ?? 500,
+      );
+    }
+  });
+
+  app.delete("/api/admin/products/:id", auth.capability("catalog.manage"), async (c) => {
+    const unavailable = dbRequired(c, store);
+    if (unavailable) return unavailable;
+    const parsed = await jsonBody(c, archiveProductInput);
+    if (parsed.error) return c.json({ error: "Invalid product version.", code: "INVALID_INPUT" }, 400);
+    const current = c.get("auth");
+    const result = await store.query(
+      `UPDATE products SET active=false,version=version+1,updated_at=now()
+       WHERE id=$1 AND workspace_id=$2 AND version=$3 AND active=true RETURNING id,version`,
+      [c.req.param("id"), current.user.workspaceId, parsed.data.expectedVersion],
+    );
+    if (!result.rowCount)
+      return c.json({ error: "Product changed or is already archived.", code: "VERSION_CONFLICT" }, 409);
+    await writeChange(store, current.user.workspaceId, "product", result.rows[0].id, result.rows[0].version);
+    await writeAudit(store, current, "product.archived", { productId: result.rows[0].id });
+    return c.json({ data: { ok: true } });
+  });
+
+  app.post("/api/admin/categories", auth.capability("catalog.manage"), async (c) => {
+    const unavailable = dbRequired(c, store);
+    if (unavailable) return unavailable;
+    const parsed = await jsonBody(c, categoryInput);
+    if (parsed.error) return c.json({ error: "Enter a valid category name.", code: "INVALID_INPUT" }, 400);
+    const current = c.get("auth");
+    try {
+      const categoryId = await store.transaction(async (client) => {
+        const category = await client.query(
+          `INSERT INTO product_categories(workspace_id,name) VALUES($1,$2) RETURNING id,version`,
+          [current.user.workspaceId, parsed.data.name],
+        );
+        await client.query(
+          `INSERT INTO discount_policies(workspace_id,tier_id,category_id,ceiling_bps)
+           SELECT $1,id,$2,0 FROM customer_tiers WHERE workspace_id=$1 ON CONFLICT DO NOTHING`,
+          [current.user.workspaceId, category.rows[0].id],
+        );
+        await writeChange(client, current.user.workspaceId, "product_category", category.rows[0].id, category.rows[0].version);
+        await writeAudit(client, current, "product_category.created", { categoryId: category.rows[0].id });
+        return category.rows[0].id;
+      });
+      const catalog = await listCatalogManagement(store, current.user.workspaceId);
+      return c.json({ data: catalog.categories.find((category) => category.id === categoryId) }, 201);
+    } catch (error) {
+      const duplicate = error.code === "23505";
+      return c.json({ error: duplicate ? "A category with this name already exists." : "Could not create category.", code: duplicate ? "CATEGORY_EXISTS" : "CATEGORY_CREATE_FAILED" }, duplicate ? 409 : 500);
+    }
+  });
+
+  app.patch("/api/admin/categories/:id", auth.capability("catalog.manage"), async (c) => {
+    const unavailable = dbRequired(c, store);
+    if (unavailable) return unavailable;
+    const parsed = await jsonBody(c, categoryUpdateInput);
+    if (parsed.error) return c.json({ error: "Enter valid category details.", code: "INVALID_INPUT" }, 400);
+    const current = c.get("auth");
+    try {
+      const result = await store.query(
+        `UPDATE product_categories SET name=$3,version=version+1,updated_at=now()
+         WHERE id=$1 AND workspace_id=$2 AND version=$4 RETURNING id,version`,
+        [c.req.param("id"), current.user.workspaceId, parsed.data.name, parsed.data.expectedVersion],
+      );
+      if (!result.rowCount)
+        return c.json({ error: "Category changed on another device.", code: "VERSION_CONFLICT" }, 409);
+      await writeChange(store, current.user.workspaceId, "product_category", result.rows[0].id, result.rows[0].version);
+      await writeAudit(store, current, "product_category.updated", { categoryId: result.rows[0].id });
+      const catalog = await listCatalogManagement(store, current.user.workspaceId);
+      return c.json({ data: catalog.categories.find((category) => category.id === result.rows[0].id) });
+    } catch (error) {
+      const duplicate = error.code === "23505";
+      return c.json({ error: duplicate ? "A category with this name already exists." : "Could not update category.", code: duplicate ? "CATEGORY_EXISTS" : "CATEGORY_UPDATE_FAILED" }, duplicate ? 409 : 500);
+    }
+  });
+
+  app.delete("/api/admin/categories/:id", auth.capability("catalog.manage"), async (c) => {
+    const unavailable = dbRequired(c, store);
+    if (unavailable) return unavailable;
+    const parsed = await jsonBody(c, deleteCategoryInput);
+    if (parsed.error) return c.json({ error: "Invalid category request.", code: "INVALID_INPUT" }, 400);
+    const current = c.get("auth");
+    try {
+      await store.transaction(async (client) => {
+        const category = (await client.query(
+          "SELECT id,version FROM product_categories WHERE id=$1 AND workspace_id=$2 FOR UPDATE",
+          [c.req.param("id"), current.user.workspaceId],
+        )).rows[0];
+        if (!category || number(category.version) !== parsed.data.expectedVersion)
+          throw Object.assign(new Error("Category changed on another device."), { status: 409, code: "VERSION_CONFLICT" });
+        const alternatives = await client.query(
+          "SELECT 1 FROM product_categories WHERE workspace_id=$1 AND id<>$2 LIMIT 1",
+          [current.user.workspaceId, category.id],
+        );
+        if (!alternatives.rowCount)
+          throw Object.assign(new Error("The catalogue must keep at least one category."), { status: 409, code: "LAST_CATEGORY" });
+        const products = (await client.query(
+          "SELECT id,version FROM products WHERE workspace_id=$1 AND category_id=$2 FOR UPDATE",
+          [current.user.workspaceId, category.id],
+        )).rows;
+        if (products.length) {
+          if (!parsed.data.replacementCategoryId)
+            throw Object.assign(new Error("Choose a replacement category for its products."), { status: 409, code: "REPLACEMENT_CATEGORY_REQUIRED" });
+          if (parsed.data.replacementCategoryId === category.id)
+            throw Object.assign(new Error("Choose a different replacement category."), { status: 400, code: "INVALID_REPLACEMENT" });
+          const replacement = await client.query(
+            "SELECT 1 FROM product_categories WHERE id=$1 AND workspace_id=$2",
+            [parsed.data.replacementCategoryId, current.user.workspaceId],
+          );
+          if (!replacement.rowCount)
+            throw Object.assign(new Error("Replacement category not found."), { status: 404, code: "CATEGORY_NOT_FOUND" });
+          await client.query(
+            "UPDATE products SET category_id=$3,version=version+1,updated_at=now() WHERE workspace_id=$1 AND category_id=$2",
+            [current.user.workspaceId, category.id, parsed.data.replacementCategoryId],
+          );
+          for (const product of products)
+            await writeChange(client, current.user.workspaceId, "product", product.id, number(product.version) + 1);
+        }
+        await client.query("DELETE FROM product_categories WHERE id=$1", [category.id]);
+        await writeChange(client, current.user.workspaceId, "product_category", category.id, number(category.version) + 1, "delete");
+        await writeAudit(client, current, "product_category.deleted", { categoryId: category.id, replacementCategoryId: parsed.data.replacementCategoryId ?? null });
+      });
+      return c.json({ data: { ok: true } });
+    } catch (error) {
+      return c.json({ error: error.message ?? "Could not delete category.", code: error.code ?? "CATEGORY_DELETE_FAILED" }, error.status ?? 500);
+    }
   });
 
   app.get("/api/admin/tiers", auth.capability("catalog.manage"), async (c) => {

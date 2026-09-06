@@ -22,6 +22,8 @@ export interface WorkspaceData {
   tiers: Array<Record<string, unknown>>;
   customers: Array<Record<string, unknown>>;
   catalog: Array<Record<string, unknown>>;
+  productCategories: Array<Record<string, unknown>>;
+  warehouses: Array<Record<string, unknown>>;
   preferences: { theme: string; accent: string; desktopAlerts?: boolean; soundAlerts?: boolean; priorityOnly?: boolean; dnd?: boolean };
 }
 

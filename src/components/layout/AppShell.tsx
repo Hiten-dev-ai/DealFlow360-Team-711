@@ -12,6 +12,7 @@ import {
   ArrowLeft,
   Bell,
   BellOff,
+  Boxes,
   CheckCheck,
   CheckCircle2,
   ChevronRight,
@@ -56,6 +57,7 @@ export type AppView =
   | "invoices"
   | "health"
   | "reports"
+  | "catalog"
   | "teams"
   | "settings";
 
@@ -127,6 +129,13 @@ export const APP_NAVIGATION = [
     hint: "Performance and exports",
   },
   {
+    id: "catalog" as const,
+    label: "Catalogue",
+    icon: Boxes,
+    hint: "Products, pricing, and stock",
+    adminOnly: true,
+  },
+  {
     id: "teams" as const,
     label: "Teams",
     icon: Users,
@@ -141,7 +150,7 @@ export const APP_VIEW_IDS: readonly AppView[] = [
 ];
 
 const ROLE_NAVIGATION: Record<SessionUser["activeRole"], readonly AppView[]> = {
-  admin: ["dashboard", "quotations", "approvals", "fulfillment", "subscriptions", "invoices", "health", "reports", "teams", "settings"],
+  admin: ["dashboard", "quotations", "approvals", "fulfillment", "subscriptions", "invoices", "health", "reports", "catalog", "teams", "settings"],
   sales_rep: ["dashboard", "quotations", "health", "reports", "settings"],
   sales_manager: ["dashboard", "quotations", "approvals", "health", "reports", "settings"],
   finance_ops: ["dashboard", "quotations", "approvals", "fulfillment", "subscriptions", "invoices", "health", "reports", "settings"],
@@ -341,6 +350,17 @@ function contextualSearchItems(data: WorkspaceData): WorkspaceSearchItem[] {
     type: "Team",
     adminOnly: true,
   });
+  for (const product of data.catalog) items.push({
+    key: `product-${String(product.id)}`,
+    view: "catalog",
+    recordId: String(product.id),
+    label: String(product.name),
+    hint: `${String(product.sku)} Â· ${String(product.category)} Â· ${product.active === false ? "Archived" : "Active"}`,
+    searchText: `product catalogue catalog sku pricing stock ${String(product.name)} ${String(product.sku)} ${String(product.category)} ${String(product.billingType ?? "")}`,
+    icon: Boxes,
+    type: "Product",
+    adminOnly: true,
+  });
   return items;
 }
 
@@ -386,6 +406,7 @@ const titles: Record<AppView, string> = {
   invoices: "Invoices",
   health: "Deal Health",
   reports: "Reports",
+  catalog: "Catalogue",
   settings: "Settings",
   teams: "Teams",
 };
