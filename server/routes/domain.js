@@ -1,7 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { z } from "zod";
 import nodemailer from "nodemailer";
-import PDFDocument from "pdfkit";
 import { streamSSE } from "hono/streaming";
 import { allocateInventory } from "../domain/allocation.js";
 import { calculateQuote, invoiceStatus, prorateMinor } from "../domain/rules.js";
@@ -15,6 +14,7 @@ import {
   smtpConnectionDetails,
   smtpHost,
 } from "../services/environment.js";
+import { generateReport } from "../services/reporting.js";
 
 const uuid = z.string().uuid();
 const quoteInput = z.object({
@@ -63,13 +63,6 @@ const addLineInput = z.object({
 
 function number(value) {
   return Number(value ?? 0);
-}
-function xml(value) {
-  return String(value)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;");
 }
 function tokenPair() {
   const token = randomBytes(32).toString("base64url");
@@ -1968,45 +1961,31 @@ export function registerDomainRoutes(app, { store, config, auth }) {
     if (!filter.success) return c.json({ error: "Invalid report filters.", code: "INVALID_INPUT" }, 400);
     const scoped = await listQuotes(store, current);
     const quotes = scoped.filter((quote) => (!filter.data.status || quote.status === filter.data.status) && (!filter.data.ownerId || quote.ownerUserId === filter.data.ownerId));
-    if (format === "xls") {
-      const columns = ["Quote", "Customer", "Owner", "Team", "Status", "Value (INR minor)", "Margin bps", "Risk"];
-      const rows = quotes.map((quote) => [quote.quoteNumber, quote.customer, quote.owner, quote.team, quote.status, quote.totalMinor, quote.marginBps, quote.riskScore]);
-      const cells = (values) => `<Row>${values.map((value) => `<Cell><Data ss:Type="${typeof value === "number" ? "Number" : "String"}">${xml(value)}</Data></Cell>`).join("")}</Row>`;
-      const workbook = `<?xml version="1.0"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"><Worksheet ss:Name="Deals"><Table>${cells(columns)}${rows.map(cells).join("")}</Table></Worksheet></Workbook>`;
-      c.header("Content-Type", "application/vnd.ms-excel; charset=utf-8");
-      c.header("Content-Disposition", 'attachment; filename="dealflow360-deals.xls"');
-      return c.body(workbook);
+    if (["pdf", "xlsx"].includes(format)) {
+      const selectedOwner = filter.data.ownerId
+        ? scoped.find((quote) => quote.ownerUserId === filter.data.ownerId)?.owner
+        : null;
+      try {
+        const output = await generateReport(format, {
+          generatedAt: new Date().toISOString(),
+          scope: { user: current.user.fullName, role: current.role },
+          filters: { status: filter.data.status ?? null, owner: selectedOwner ?? null },
+          quotes,
+        });
+        const date = new Date().toISOString().slice(0, 10);
+        c.header("Content-Type", format === "pdf" ? "application/pdf" : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        c.header("Content-Disposition", `attachment; filename="dealflow360-sales-report-${date}.${format}"`);
+        c.header("Content-Length", String(output.length));
+        return c.body(output);
+      } catch (error) {
+        console.error("Report generation failed", error.code ?? "REPORT_GENERATION_FAILED");
+        return c.json({ error: "Could not generate the report.", code: error.code ?? "REPORT_GENERATION_FAILED" }, 503);
+      }
     }
-    if (format === "pdf") {
-      const chunks = [];
-      const document = new PDFDocument({ margin: 42, size: "A4" });
-      document.on("data", (chunk) => chunks.push(chunk));
-      const done = new Promise((resolve) => document.on("end", resolve));
-      document.fontSize(20).text("DealFlow360 Deal Report");
-      document.fontSize(9).fillColor("#5b6475").text(`Generated ${new Date().toISOString()} · ${quotes.length} role-scoped deals`);
-      document.moveDown();
-      const total = quotes.reduce((sum, quote) => sum + quote.totalMinor, 0);
-      const won = quotes.filter((quote) => quote.status === "accepted").length;
-      document.fillColor("#111827").fontSize(11).text(`Pipeline value: INR ${(total / 100).toLocaleString("en-IN")}    Accepted: ${won}    Conversion: ${quotes.length ? Math.round(won / quotes.length * 100) : 0}%`);
-      document.moveDown();
-      for (const quote of quotes)
-        document
-          .fontSize(10)
-          .text(
-            `${quote.quoteNumber}  ${quote.customer}  ${quote.status}  INR ${(quote.totalMinor / 100).toLocaleString("en-IN")}  Risk ${quote.riskScore}`,
-          );
-      document.end();
-      await done;
-      c.header("Content-Type", "application/pdf");
-      c.header(
-        "Content-Disposition",
-        'attachment; filename="dealflow360-deals.pdf"',
-      );
-      return c.body(Buffer.concat(chunks));
-    }
-    return c.json({ error: "Use pdf or xls.", code: "FORMAT_INVALID" }, 400);
+    return c.json({ error: "Use PDF or Excel.", code: "FORMAT_INVALID" }, 400);
   };
 
   app.get("/api/reports/deals.pdf", auth.required, (c) => renderReport(c, "pdf"));
-  app.get("/api/reports/deals.xls", auth.required, (c) => renderReport(c, "xls"));
+  app.get("/api/reports/deals.xlsx", auth.required, (c) => renderReport(c, "xlsx"));
+  app.get("/api/reports/deals.xls", auth.required, (c) => renderReport(c, "xlsx"));
 }

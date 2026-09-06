@@ -71,7 +71,7 @@ export async function logout() {
 
 export const getBootstrap = () => apiFetch<BootstrapResponse>('/api/bootstrap');
 
-export async function downloadReport(format: 'pdf' | 'xls', filters: { status?: string; ownerId?: string } = {}) {
+export async function downloadReport(format: 'pdf' | 'xlsx', filters: { status?: string; ownerId?: string } = {}) {
   const query = new URLSearchParams();
   if (filters.status && filters.status !== 'all') query.set('status', filters.status);
   if (filters.ownerId && filters.ownerId !== 'all') query.set('ownerId', filters.ownerId);
@@ -84,7 +84,7 @@ export async function downloadReport(format: 'pdf' | 'xls', filters: { status?: 
     throw new ApiError(body?.error ?? 'Report download failed.', response.status, body?.code ?? 'REPORT_FAILED');
   }
   const disposition = response.headers.get('content-disposition') ?? '';
-  const filename = disposition.match(/filename="?([^";]+)"?/i)?.[1] ?? `dealflow360-deals.${format}`;
+  const filename = disposition.match(/filename="?([^";]+)"?/i)?.[1] ?? `dealflow360-sales-report.${format}`;
   return { blob: await response.blob(), filename };
 }
 

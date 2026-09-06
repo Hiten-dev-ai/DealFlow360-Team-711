@@ -150,7 +150,7 @@ PostgreSQL 17: 127.0.0.1:55432
 - PostgreSQL 17 with parameterized `pg` queries
 - Zod validation
 - Argon2id password hashing
-- PDFKit report generation and spreadsheet-compatible XLS exports
+- Python-generated PDF and native Excel reports using ReportLab and OpenPyXL
 - Vitest unit and PostgreSQL integration tests
 
 ## Repository layout
@@ -183,7 +183,7 @@ deploy/             Secret provisioning, isolated verification, release, rollbac
 | Approvals | `/api/approvals/:id/decision` |
 | Customer portal | `/api/quotes/:id/portal-link`, `/api/portal/redeem`, `/api/portal/quote` |
 | Operations | `/api/fulfillment/quotes/:id/allocate`, `/api/subscriptions/:id` |
-| Finance | `/api/invoices/:id/payments`, `/api/reports/deals.pdf`, `/api/reports/deals.xls` |
+| Finance | `/api/invoices/:id/payments`, `/api/reports/deals.pdf`, `/api/reports/deals.xlsx` |
 | Synchronization | `/api/sync`, `/api/events` |
 | Service | `/api/health`, `/api/version` |
 
@@ -195,16 +195,21 @@ Mutation responses use consistent JSON errors. Sensitive operations require an a
 
 - Node.js 22+
 - npm 10+
+- Python 3.12+ with virtual-environment support
 - PostgreSQL 17, locally or in Docker
 
 ### Install and verify
 
 ```bash
 npm install
+python -m venv .venv
+.venv/bin/python -m pip install -r requirements-reporting.txt
 npm test
 npm run lint
 npm run build
 ```
+
+On Windows, activate `.venv` or set `REPORT_PYTHON` to the full path of its Python executable before starting the server.
 
 ### Configure the environment
 
@@ -249,6 +254,7 @@ npm run dev
 | `HOST` / `PORT` | No | Listener address; production uses `127.0.0.1:4174` |
 | `WORKSPACE_ID` | No | Single-workspace identifier |
 | `RELEASE_ID` | Production | Version exposed by `/api/version` |
+| `REPORT_PYTHON` | No | Python executable used by the PDF and Excel report engine |
 | `DEMO_*_PASSWORD` | Seeding | Four primary demo-account passwords, supplied outside Git |
 | `DEMO_STAFF_PASSWORD` | Seeding | Password for generated hierarchy accounts; falls back to `DEMO_SALES_PASSWORD` |
 | `SMTP_URL` | No | SMTP connection URL for invitation and portal email |

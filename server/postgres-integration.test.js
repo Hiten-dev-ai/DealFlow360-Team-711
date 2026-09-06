@@ -93,11 +93,13 @@ describe.runIf(Boolean(databaseUrl))('PostgreSQL end-to-end flow', () => {
     const pdf = await request(app, '/api/reports/deals.pdf', { auth: sales });
     expect(pdf.status).toBe(200);
     expect(pdf.headers.get('content-type')).toContain('application/pdf');
-    expect((await pdf.arrayBuffer()).byteLength).toBeGreaterThan(500);
-    const xls = await request(app, '/api/reports/deals.xls', { auth: sales });
-    expect(xls.status).toBe(200);
-    expect(xls.headers.get('content-type')).toContain('application/vnd.ms-excel');
-    expect(await xls.text()).toContain('<Workbook');
+    const pdfBytes = Buffer.from(await pdf.arrayBuffer());
+    expect(pdfBytes.byteLength).toBeGreaterThan(500);
+    expect(pdfBytes.subarray(0, 4).toString()).toBe('%PDF');
+    const xlsx = await request(app, '/api/reports/deals.xlsx', { auth: sales });
+    expect(xlsx.status).toBe(200);
+    expect(xlsx.headers.get('content-type')).toContain('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    expect(Buffer.from(await xlsx.arrayBuffer()).subarray(0, 2).toString()).toBe('PK');
     const unauthenticatedReport = await request(app, '/api/reports/deals.pdf');
     expect(unauthenticatedReport.status).toBe(401);
     const adminReport = await request(app, '/api/reports/deals.pdf?status=approved', { auth: admin });

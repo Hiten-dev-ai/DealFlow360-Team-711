@@ -1345,7 +1345,7 @@ export function DealHealthView({ focusId, focusRequest }: SearchFocusProps) {
 
 export function ReportsView() {
   const { data, connection } = useWorkspace();
-  const [downloading, setDownloading] = useState<"pdf" | "xls" | null>(null);
+  const [downloading, setDownloading] = useState<"pdf" | "xlsx" | null>(null);
   const [status, setStatus] = useState("all");
   const [ownerId, setOwnerId] = useState("all");
   const ownerOptions = useMemo<SelectOption[]>(() => [
@@ -1379,7 +1379,7 @@ export function ReportsView() {
   })).filter((item) => item.count > 0);
   const maxStatusCount = Math.max(1, ...statusSeries.map((item) => item.count));
   const topDeals = [...filteredQuotes].sort((a, b) => amount(b.totalMinor) - amount(a.totalMinor)).slice(0, 6);
-  const download = async (format: "pdf" | "xls") => {
+  const download = async (format: "pdf" | "xlsx") => {
     setDownloading(format);
     try {
       const file = await downloadReport(format, { status, ownerId });
@@ -1421,9 +1421,9 @@ export function ReportsView() {
               type="button"
               className="secondary-action"
               disabled={connection !== "online" || downloading !== null}
-              onClick={() => void download("xls")}
+              onClick={() => void download("xlsx")}
             >
-              <Download size={17} /> {downloading === "xls" ? "Preparing" : "XLS"}
+              <Download size={17} /> {downloading === "xlsx" ? "Preparing" : "Excel"}
             </button>
           </div>
         }

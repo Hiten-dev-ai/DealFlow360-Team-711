@@ -7,4 +7,10 @@ coverage/
 .DS_Store
 *.log
 .vite/
+.venv/
+__pycache__/
+*.pyc
+output/
+outputs/
+tmp/
 

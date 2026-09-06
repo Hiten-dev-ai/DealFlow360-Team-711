@@ -19,6 +19,8 @@ docker exec "$database_container" pg_dump -U "$database_user" -d "$database_name
 tar -xzf "$archive" -C "$release_dir"
 cd "$release_dir"
 npm ci --omit=dev
+python3 -m venv .venv
+.venv/bin/python -m pip install --disable-pip-version-check --no-cache-dir -r requirements-reporting.txt
 
 set -a
 source /etc/dealflow360-team-711.env
