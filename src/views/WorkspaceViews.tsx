@@ -583,42 +583,6 @@ export function QuotationsView({ focusId, focusRequest }: SearchFocusProps) {
                 </strong>
               </div>
             </div>
-            <dl className="signal-detail-list">
-              <div><dt>Sales team</dt><dd>{text(selected.team)}</dd></div>
-              <div><dt>Customer tier</dt><dd>{text(selected.tier)}</dd></div>
-              <div><dt>Valid until</dt><dd>{new Date(text(selected.validUntil)).toLocaleDateString()}</dd></div>
-              <div><dt>Approval route</dt><dd>{((selected.approvalRoute as string[]) ?? []).length ? ((selected.approvalRoute as string[]) ?? []).map(titleCase).join(" → ") : "Automatic"}</dd></div>
-            </dl>
-            <section className="detail-section">
-              <header><strong>Line items</strong><span>{((selected.lines as Row[]) ?? []).length} products</span></header>
-              <div className="quotation-line-list">
-                {((selected.lines as Row[]) ?? []).map((line) => {
-                  const lineTotal = amount(line.unitPriceMinor) * amount(line.quantity) * (1 - amount(line.discountBps) / 10000);
-                  return <article key={text(line.id)}>
-                    <span><strong>{text(line.product)}</strong><small>{text(line.sku)} · {titleCase(line.billingType)}</small></span>
-                    <span><small>Quantity</small><strong>{text(line.quantity)}</strong></span>
-                    <span><small>Discount</small><strong>{(amount(line.discountBps) / 100).toFixed(1)}%</strong></span>
-                    <span><small>Line value</small><strong>{formatMoney(lineTotal)}</strong></span>
-                  </article>;
-                })}
-              </div>
-            </section>
-            <div className="suggestion-card">
-              <Sparkles size={19} />
-              <div>
-                <strong>
-                  {((selected.suggestions as Row[]) ?? [])[0]
-                    ? text(((selected.suggestions as Row[]) ?? [])[0].product)
-                    : "Governed pricing"}
-                </strong>
-                <p>{((selected.suggestions as Row[]) ?? [])[0]
-                  ? `${formatMoney(((selected.suggestions as Row[]) ?? [])[0].marginImpactMinor)} expected margin contribution.`
-                  : ((selected.approvalRoute as unknown[]) ?? []).length
-                    ? `Route: ${(selected.approvalRoute as string[]).join(" → ")}`
-                    : "Eligible for automatic approval."}</p>
-              </div>
-              {canEdit && ((selected.suggestions as Row[]) ?? [])[0] && <button type="button" className="secondary-action" disabled={connection !== "online"} onClick={() => void addSuggestion(((selected.suggestions as Row[]) ?? [])[0])}>Add</button>}
-            </div>
             {canShareCustomerLink && (
               <section className="customer-link-card" aria-label="Customer magic link">
                 <div className="customer-link-heading">
@@ -655,6 +619,42 @@ export function QuotationsView({ focusId, focusRequest }: SearchFocusProps) {
                 )}
               </section>
             )}
+            <dl className="signal-detail-list">
+              <div><dt>Sales team</dt><dd>{text(selected.team)}</dd></div>
+              <div><dt>Customer tier</dt><dd>{text(selected.tier)}</dd></div>
+              <div><dt>Valid until</dt><dd>{new Date(text(selected.validUntil)).toLocaleDateString()}</dd></div>
+              <div><dt>Approval route</dt><dd>{((selected.approvalRoute as string[]) ?? []).length ? ((selected.approvalRoute as string[]) ?? []).map(titleCase).join(" → ") : "Automatic"}</dd></div>
+            </dl>
+            <section className="detail-section">
+              <header><strong>Line items</strong><span>{((selected.lines as Row[]) ?? []).length} products</span></header>
+              <div className="quotation-line-list">
+                {((selected.lines as Row[]) ?? []).map((line) => {
+                  const lineTotal = amount(line.unitPriceMinor) * amount(line.quantity) * (1 - amount(line.discountBps) / 10000);
+                  return <article key={text(line.id)}>
+                    <span><strong>{text(line.product)}</strong><small>{text(line.sku)} · {titleCase(line.billingType)}</small></span>
+                    <span><small>Quantity</small><strong>{text(line.quantity)}</strong></span>
+                    <span><small>Discount</small><strong>{(amount(line.discountBps) / 100).toFixed(1)}%</strong></span>
+                    <span><small>Line value</small><strong>{formatMoney(lineTotal)}</strong></span>
+                  </article>;
+                })}
+              </div>
+            </section>
+            <div className="suggestion-card">
+              <Sparkles size={19} />
+              <div>
+                <strong>
+                  {((selected.suggestions as Row[]) ?? [])[0]
+                    ? text(((selected.suggestions as Row[]) ?? [])[0].product)
+                    : "Governed pricing"}
+                </strong>
+                <p>{((selected.suggestions as Row[]) ?? [])[0]
+                  ? `${formatMoney(((selected.suggestions as Row[]) ?? [])[0].marginImpactMinor)} expected margin contribution.`
+                  : ((selected.approvalRoute as unknown[]) ?? []).length
+                    ? `Route: ${(selected.approvalRoute as string[]).join(" → ")}`
+                    : "Eligible for automatic approval."}</p>
+              </div>
+              {canEdit && ((selected.suggestions as Row[]) ?? [])[0] && <button type="button" className="secondary-action" disabled={connection !== "online"} onClick={() => void addSuggestion(((selected.suggestions as Row[]) ?? [])[0])}>Add</button>}
+            </div>
             <ErrorText value={error} />
             <div className="modal-actions">
               {canEdit && ["draft", "negotiation"].includes(text(selected.status)) && (

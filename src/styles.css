@@ -487,8 +487,8 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .notification-list small { color: var(--text-muted); font-size: .64rem; }
 .clear-notifications { width: 100%; min-height: 40px; justify-content: center; color: var(--text-muted); }
 
-.modal-layer { position: fixed; z-index: 120; inset: 0; display: grid; place-items: center; padding: 20px; background: rgba(2, 6, 23, .62); backdrop-filter: blur(10px); animation: fade-in .16s ease both; }
-.modal-card { width: min(100%, 560px); max-height: min(88dvh, 780px); overflow: hidden; border: 1px solid var(--border-strong); border-radius: 20px; background: var(--surface); box-shadow: 0 30px 90px rgba(2, 6, 23, .48); animation: modal-in .18s cubic-bezier(.22,.7,.22,1) both; }
+.modal-layer { position: fixed; z-index: 120; inset: 0; display: grid; place-items: center; padding: 20px; overflow: auto; overscroll-behavior: contain; background: rgba(2, 6, 23, .62); backdrop-filter: blur(10px); animation: fade-in .16s ease both; }
+.modal-card { display: flex; width: min(100%, 560px); max-height: min(88dvh, 780px); min-height: 0; overflow: hidden; flex-direction: column; border: 1px solid var(--border-strong); border-radius: 20px; background: var(--surface); box-shadow: 0 30px 90px rgba(2, 6, 23, .48); animation: modal-in .18s cubic-bezier(.22,.7,.22,1) both; }
 .modal-card.wide { width: min(100%, 760px); }
 .modal-card.search-modal {
   width: min(100%, 720px);
@@ -502,10 +502,10 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .search-modal .modal-content { display: flex; height: calc(100% - 76px); max-height: none; flex-direction: column; padding: 18px; }
 .search-modal .command-search { flex: 0 0 auto; background: color-mix(in srgb, var(--surface-soft) 88%, var(--surface)); }
 .search-modal .command-results { min-height: 0; flex: 1; grid-auto-rows: min-content; align-content: start; overflow-y: auto; padding: 3px 4px 6px 0; scrollbar-width: thin; }
-.modal-header { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 19px 20px; border-bottom: 1px solid var(--border); }
+.modal-header { display: flex; flex: 0 0 auto; align-items: center; justify-content: space-between; gap: 20px; padding: 19px 20px; border-bottom: 1px solid var(--border); }
 .modal-header span { color: var(--accent); font-size: .61rem; font-weight: 850; letter-spacing: .14em; text-transform: uppercase; }
 .modal-header h2 { margin: 3px 0 0; font-size: 1.18rem; letter-spacing: -.025em; }
-.modal-content { max-height: calc(88dvh - 76px); padding: 20px; overflow-y: auto; }
+.modal-content { min-height: 0; max-height: calc(88dvh - 76px); padding: 20px; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
 .command-search { display: flex; align-items: center; gap: 10px; min-height: 50px; padding: 0 14px; border: 1px solid var(--border-strong); border-radius: 13px; color: var(--text-muted); background: var(--surface-soft); }
 .command-search:focus-within { border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
 .command-search input { flex: 1; min-width: 0; height: 48px; border: 0; outline: 0; color: var(--text); background: transparent; }
@@ -1244,7 +1244,7 @@ button.record-row { cursor: pointer; }
   .invoice-table .record-money,
   .invoice-table .record-row > [data-label] { min-height: 30px; padding: 2px 0; }
   .quotation-detail-modal-layer { align-items: start; padding: max(10px, env(safe-area-inset-top)) 10px max(10px, env(safe-area-inset-bottom)); }
-  .quotation-detail-modal { display: flex; width: 100%; max-height: calc(100dvh - max(20px, env(safe-area-inset-top) + env(safe-area-inset-bottom))); flex-direction: column; border-radius: 17px; }
+  .quotation-detail-modal { width: 100%; max-height: calc(100dvh - max(10px, env(safe-area-inset-top)) - max(10px, env(safe-area-inset-bottom))); border-radius: 17px; }
   .quotation-detail-modal .modal-header { flex: 0 0 auto; padding: 15px; }
   .quotation-detail-modal .modal-content { min-height: 0; max-height: none; flex: 1; padding: 15px; overflow-y: auto; }
   .quotation-detail-modal .detail-stack { gap: 12px; }
