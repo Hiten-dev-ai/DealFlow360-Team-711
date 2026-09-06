@@ -8,9 +8,11 @@ import {
   Check,
   CheckCircle2,
   ChevronRight,
+  Copy,
   Download,
   FilePlus2,
   Filter,
+  Link2,
   PackageCheck,
   Pause,
   Pencil,
@@ -610,28 +612,44 @@ export function QuotationsView({ focusId, focusRequest }: SearchFocusProps) {
               </div>
               {canEdit && ((selected.suggestions as Row[]) ?? [])[0] && <button type="button" className="secondary-action" disabled={connection !== "online"} onClick={() => void addSuggestion(((selected.suggestions as Row[]) ?? [])[0])}>Add</button>}
             </div>
-            {portalLink && (
-              <div className="form-note">
-                <span className="portal-link-text">{portalLink}</span>
-                <button
-                  type="button"
-                  className="secondary-action"
-                  onClick={() => void copyPortalLink()}
-                >
-                  Copy
-                </button>
-              </div>
+            {canShareCustomerLink && (
+              <section className="customer-link-card" aria-label="Customer magic link">
+                <div className="customer-link-heading">
+                  <span><Link2 size={18} /></span>
+                  <div>
+                    <strong>Customer magic link</strong>
+                    <small>
+                      {portalLink
+                        ? "Ready to share · expires in 30 minutes"
+                        : text(selected.status) === "approved"
+                          ? "Create secure access to this quotation"
+                          : "Available after the quotation is approved"}
+                    </small>
+                  </div>
+                </div>
+                {portalLink && <span className="customer-link-value" title={portalLink}>{portalLink}</span>}
+                {portalLink ? (
+                  <button
+                    type="button"
+                    className="secondary-action customer-link-action"
+                    onClick={() => void copyPortalLink()}
+                  >
+                    <Copy size={16} /> Copy magic link
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="secondary-action customer-link-action"
+                    disabled={connection !== "online" || text(selected.status) !== "approved"}
+                    onClick={createPortalLink}
+                  >
+                    <Link2 size={16} /> Create magic link
+                  </button>
+                )}
+              </section>
             )}
             <ErrorText value={error} />
             <div className="modal-actions">
-              {canShareCustomerLink && text(selected.status) === "approved" && <button
-                type="button"
-                className="secondary-action"
-                disabled={connection !== "online"}
-                onClick={createPortalLink}
-              >
-                Share with customer
-              </button>}
               {canEdit && ["draft", "negotiation"].includes(text(selected.status)) && (
                 <button
                   type="button"

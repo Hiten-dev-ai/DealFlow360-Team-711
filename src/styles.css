@@ -662,6 +662,14 @@ button.record-row { cursor: pointer; }
 .form-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .form-note { display: flex; align-items: center; gap: 10px; padding: 12px; border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--border)); border-radius: 11px; color: var(--text-muted); background: var(--accent-soft); font-size: .7rem; }
 .form-note svg { flex: 0 0 auto; color: var(--accent); }
+.customer-link-card { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 11px 14px; padding: 14px; border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--border)); border-radius: 13px; background: color-mix(in srgb, var(--accent) 7%, var(--surface)); }
+.customer-link-heading { display: flex; min-width: 0; align-items: center; gap: 11px; }
+.customer-link-heading > span { display: grid; flex: 0 0 36px; width: 36px; height: 36px; place-items: center; border-radius: 10px; color: var(--accent); background: var(--accent-soft); }
+.customer-link-heading > div { display: grid; min-width: 0; gap: 3px; }
+.customer-link-heading strong { font-size: .78rem; }
+.customer-link-heading small { color: var(--text-muted); font-size: .67rem; }
+.customer-link-value { grid-column: 1 / -1; min-width: 0; overflow: hidden; padding: 9px 11px; border: 1px solid var(--border); border-radius: 9px; color: var(--text-muted); background: var(--surface); font: 650 .65rem/1.35 ui-monospace, SFMono-Regular, Consolas, monospace; text-overflow: ellipsis; white-space: nowrap; }
+.customer-link-action { min-height: 38px; padding-inline: 13px; white-space: nowrap; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 9px; padding-top: 3px; }
 .modal-actions.split { justify-content: space-between; }
 .detail-hero { display: flex; align-items: flex-start; justify-content: space-between; gap: 15px; }
@@ -874,6 +882,8 @@ button.record-row { cursor: pointer; }
   .form-columns, .detail-metrics, .report-filters { grid-template-columns: 1fr; }
   .suggestion-card { grid-template-columns: 25px 1fr; }
   .suggestion-card .secondary-action { grid-column: 1 / -1; }
+  .customer-link-card { grid-template-columns: 1fr; }
+  .customer-link-action { width: 100%; }
   .modal-layer { align-items: end; padding: 10px; }
   .modal-card { max-height: 91dvh; border-radius: 18px; }
   .modal-content { max-height: calc(91dvh - 74px); }
