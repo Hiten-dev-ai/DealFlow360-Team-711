@@ -19,6 +19,7 @@ export interface WorkspaceData {
   alerts: Array<Record<string, unknown>>;
   notifications: Array<Record<string, unknown>>;
   teams: Array<Record<string, unknown>>;
+  tiers: Array<Record<string, unknown>>;
   customers: Array<Record<string, unknown>>;
   catalog: Array<Record<string, unknown>>;
   preferences: { theme: string; accent: string; desktopAlerts?: boolean; soundAlerts?: boolean; priorityOnly?: boolean; dnd?: boolean };

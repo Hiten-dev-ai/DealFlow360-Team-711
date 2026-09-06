@@ -71,8 +71,11 @@ describe('backend foundation', () => {
 
   it('keeps role capabilities explicit', () => {
     expect(hasCapability('admin', 'users.manage')).toBe(true);
+    expect(hasCapability('admin', 'portal_links.create')).toBe(true);
+    expect(hasCapability('sales_rep', 'portal_links.create')).toBe(true);
     expect(hasCapability('sales_manager', 'approvals.manager')).toBe(true);
     expect(hasCapability('sales_rep', 'approvals.manager')).toBe(false);
+    expect(hasCapability('finance_ops', 'portal_links.create')).toBe(false);
     expect(hasCapability('finance_ops', 'billing.manage')).toBe(true);
   });
 });

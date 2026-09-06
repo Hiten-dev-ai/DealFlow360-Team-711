@@ -63,6 +63,7 @@ const EMPTY_WORKSPACE: WorkspaceData = {
   alerts: [],
   notifications: [],
   teams: [],
+  tiers: [],
   customers: [],
   catalog: [],
   preferences: { theme: "system", accent: "blue" },

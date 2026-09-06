@@ -44,6 +44,7 @@ describe.runIf(Boolean(databaseUrl))('PostgreSQL end-to-end flow', () => {
     expect(initial.invoices).toEqual([]);
     expect(initial.payments).toEqual([]);
     expect(initial.teams).toEqual([]);
+    expect(initial.tiers).toEqual([]);
     expect(initial.approvals).toEqual([]);
     expect(new Set(initial.quotes.map((quote) => quote.owner))).toEqual(new Set(['Sujith Kumar']));
     const visibleQuoteIds = new Set(initial.quotes.map((quote) => quote.id));
@@ -57,6 +58,17 @@ describe.runIf(Boolean(databaseUrl))('PostgreSQL end-to-end flow', () => {
     expect(environmentData).toMatchObject({ smtpConfigured: true, smtpHost: 'localhost', smtpPort: 2525, smtpUsername: 'user', smtpSecure: false, smtpHasPassword: true, source: 'workspace' });
     expect(JSON.stringify(environmentData)).not.toContain('secret');
     expect((await request(app, '/api/admin/environment', { method: 'PATCH', auth: admin, body: { clearSmtp: true } })).status).toBe(200);
+
+    expect((await request(app, '/api/admin/tiers', { auth: sales })).status).toBe(403);
+    const createdTierResponse = await request(app, '/api/admin/tiers', { method: 'POST', auth: admin, body: { name: 'Integration Tier', overdueRisk: 12, discountCeilingBps: 650 } });
+    expect(createdTierResponse.status).toBe(201);
+    const createdTier = (await createdTierResponse.json()).data;
+    expect(createdTier).toMatchObject({ name: 'Integration Tier', overdueRisk: 12, discountCeilingBps: 650, customerCount: 0 });
+    const updatedTierResponse = await request(app, `/api/admin/tiers/${createdTier.id}`, { method: 'PATCH', auth: admin, body: { name: 'Integration Plus', overdueRisk: 18, discountCeilingBps: 800, expectedVersion: Number(createdTier.version) } });
+    expect(updatedTierResponse.status).toBe(200);
+    const updatedTier = (await updatedTierResponse.json()).data;
+    expect(updatedTier).toMatchObject({ name: 'Integration Plus', overdueRisk: 18, discountCeilingBps: 800 });
+    expect((await request(app, `/api/admin/tiers/${updatedTier.id}`, { method: 'DELETE', auth: admin, body: { expectedVersion: Number(updatedTier.version) } })).status).toBe(200);
 
     const createdTeamResponse = await request(app, '/api/admin/teams', { method: 'POST', auth: admin, body: { name: 'Integration Team' } });
     expect(createdTeamResponse.status).toBe(201);

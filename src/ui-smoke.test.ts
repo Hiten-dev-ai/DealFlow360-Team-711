@@ -51,6 +51,7 @@ describe('UI smoke coverage', () => {
       alerts: [],
       notifications: [],
       teams: [{ id: 'team-1', name: 'Enterprise South', members: [] }],
+      tiers: [],
       customers: [],
       catalog: [],
       preferences: { theme: 'system', accent: 'blue' },

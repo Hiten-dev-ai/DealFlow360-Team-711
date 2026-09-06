@@ -4,6 +4,7 @@ export const ROLE_CAPABILITIES = Object.freeze({
   admin: Object.freeze([
     'workspace.read',
     'quotes.read.all', 'quotes.write.all', 'quotes.submit',
+    'portal_links.create',
     'approvals.manager', 'approvals.finance',
     'fulfillment.manage', 'billing.manage', 'reports.read.all',
     'catalog.manage', 'teams.manage', 'users.manage', 'environment.manage',

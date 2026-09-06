@@ -150,6 +150,22 @@ async function listQuotes(store, auth) {
   return result.rows.map(mapQuote);
 }
 
+async function listCustomerTiers(store, workspaceId) {
+  const result = await store.query(
+    `SELECT t.id,t.name,t.overdue_risk AS "overdueRisk",t.version,t.updated_at AS "updatedAt",
+      count(DISTINCT c.id)::int AS "customerCount",
+      COALESCE(round(avg(dp.ceiling_bps))::int,0) AS "discountCeilingBps"
+     FROM customer_tiers t
+     LEFT JOIN customers c ON c.tier_id=t.id
+     LEFT JOIN discount_policies dp ON dp.tier_id=t.id AND dp.workspace_id=t.workspace_id
+     WHERE t.workspace_id=$1
+     GROUP BY t.id
+     ORDER BY t.name`,
+    [workspaceId],
+  );
+  return result.rows;
+}
+
 async function writeChange(
   client,
   workspaceId,
@@ -318,6 +334,7 @@ export function registerDomainRoutes(app, { store, config, auth }) {
       alerts,
       notifications,
       teams,
+      tiers,
       customers,
       catalog,
       preferences,
@@ -325,8 +342,12 @@ export function registerDomainRoutes(app, { store, config, auth }) {
     ] = await Promise.all([
       listQuotes(store, current),
       store.query(
-        `SELECT ar.id, ar.quote_id AS "quoteId", ar.stage, ar.status, ar.reason, ar.created_at AS "createdAt", q.quote_number AS "quoteNumber", q.total_minor AS "totalMinor", q.risk_score AS "riskScore", c.name AS customer
+        `SELECT ar.id, ar.quote_id AS "quoteId", ar.stage, ar.status, ar.reason, ar.created_at AS "createdAt",
+          q.quote_number AS "quoteNumber",q.total_minor AS "totalMinor",q.discount_minor AS "discountMinor",
+          q.margin_bps AS "marginBps",q.risk_score AS "riskScore",q.status AS "quoteStatus",q.revision,
+          c.name AS customer,ct.name AS tier,u.full_name AS owner,st.name AS team
         FROM approval_requests ar JOIN quotes q ON q.id=ar.quote_id JOIN customers c ON c.id=q.customer_id
+        LEFT JOIN customer_tiers ct ON ct.id=c.tier_id JOIN users u ON u.id=q.owner_user_id JOIN sales_teams st ON st.id=q.team_id
         WHERE q.workspace_id=$1 AND ar.status='pending' AND (($2='admin') OR ($2='sales_manager' AND ar.stage='manager' AND q.team_id=$3) OR ($2='finance_ops' AND ar.stage='finance')) ORDER BY ar.created_at`,
         [current.user.workspaceId, current.role, current.user.teamId],
       ),
@@ -368,6 +389,9 @@ export function registerDomainRoutes(app, { store, config, auth }) {
         `SELECT t.id,t.name,t.manager_user_id AS "managerUserId",t.version,COALESCE(json_agg(json_build_object('id',u.id,'fullName',u.full_name,'email',u.email,'role',m.role)) FILTER (WHERE u.id IS NOT NULL),'[]') AS members FROM sales_teams t LEFT JOIN workspace_memberships m ON m.team_id=t.id LEFT JOIN users u ON u.id=m.user_id WHERE t.workspace_id=$1 GROUP BY t.id ORDER BY t.name`,
         [current.user.workspaceId],
       ) : Promise.resolve({ rows: [] }),
+      current.role === "admin"
+        ? listCustomerTiers(store, current.user.workspaceId)
+        : Promise.resolve([]),
       store.query(
         `SELECT c.id,c.name,c.email,c.company,c.version,t.name AS tier,t.id AS "tierId" FROM customers c LEFT JOIN customer_tiers t ON t.id=c.tier_id WHERE c.workspace_id=$1 ORDER BY c.name`,
         [current.user.workspaceId],
@@ -396,6 +420,7 @@ export function registerDomainRoutes(app, { store, config, auth }) {
         alerts: alerts.rows,
         notifications: notifications.rows,
         teams: teams.rows,
+        tiers,
         customers: customers.rows,
         catalog: catalog.rows,
         preferences: preferences.rows[0] ?? { theme: "system", accent: "blue" },
@@ -864,15 +889,10 @@ export function registerDomainRoutes(app, { store, config, auth }) {
     }
   });
 
-  app.post("/api/quotes/:id/portal-link", auth.required, async (c) => {
+  app.post("/api/quotes/:id/portal-link", auth.capability("portal_links.create"), async (c) => {
     const unavailable = dbRequired(c, store);
     if (unavailable) return unavailable;
     const current = c.get("auth");
-    if (!["admin", "sales_rep", "sales_manager"].includes(current.role))
-      return c.json(
-        { error: "You cannot create customer links.", code: "FORBIDDEN" },
-        403,
-      );
     const pair = tokenPair();
     try {
       const result = await store.query(
@@ -1573,6 +1593,146 @@ export function registerDomainRoutes(app, { store, config, auth }) {
       ],
     );
     return c.json({ data: result.rows[0] });
+  });
+
+  app.get("/api/admin/tiers", auth.capability("catalog.manage"), async (c) => {
+    const unavailable = dbRequired(c, store);
+    if (unavailable) return unavailable;
+    return c.json({
+      data: await listCustomerTiers(store, c.get("auth").user.workspaceId),
+    });
+  });
+
+  app.post("/api/admin/tiers", auth.capability("catalog.manage"), async (c) => {
+    const unavailable = dbRequired(c, store);
+    if (unavailable) return unavailable;
+    const parsed = z.object({
+      name: z.string().trim().min(2).max(40),
+      overdueRisk: z.number().int().min(0).max(100),
+      discountCeilingBps: z.number().int().min(0).max(10000),
+    }).safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success)
+      return c.json({ error: "Enter valid tier details.", code: "INVALID_INPUT" }, 400);
+    const current = c.get("auth");
+    try {
+      const tierId = await store.transaction(async (client) => {
+        const duplicate = await client.query(
+          `SELECT 1 FROM customer_tiers WHERE workspace_id=$1 AND lower(name)=lower($2)`,
+          [current.user.workspaceId, parsed.data.name],
+        );
+        if (duplicate.rowCount)
+          throw Object.assign(new Error("A tier with this name already exists."), { status: 409, code: "TIER_EXISTS" });
+        const tier = (await client.query(
+          `INSERT INTO customer_tiers(workspace_id,name,overdue_risk) VALUES($1,$2,$3) RETURNING id,version`,
+          [current.user.workspaceId, parsed.data.name, parsed.data.overdueRisk],
+        )).rows[0];
+        await client.query(
+          `INSERT INTO discount_policies(workspace_id,tier_id,category_id,ceiling_bps)
+           SELECT $1,$2,id,$3 FROM product_categories WHERE workspace_id=$1`,
+          [current.user.workspaceId, tier.id, parsed.data.discountCeilingBps],
+        );
+        await writeChange(client, current.user.workspaceId, "tier", tier.id, tier.version);
+        await writeAudit(client, current, "tier.created", { tierId: tier.id });
+        return tier.id;
+      });
+      const tiers = await listCustomerTiers(store, current.user.workspaceId);
+      return c.json({ data: tiers.find((tier) => tier.id === tierId) }, 201);
+    } catch (error) {
+      return c.json({ error: error.message ?? "Could not create tier.", code: error.code ?? "TIER_CREATE_FAILED" }, error.status ?? 500);
+    }
+  });
+
+  app.patch("/api/admin/tiers/:id", auth.capability("catalog.manage"), async (c) => {
+    const unavailable = dbRequired(c, store);
+    if (unavailable) return unavailable;
+    const parsed = z.object({
+      name: z.string().trim().min(2).max(40),
+      overdueRisk: z.number().int().min(0).max(100),
+      discountCeilingBps: z.number().int().min(0).max(10000),
+      expectedVersion: z.number().int().positive(),
+    }).safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success)
+      return c.json({ error: "Enter valid tier details.", code: "INVALID_INPUT" }, 400);
+    const current = c.get("auth");
+    try {
+      await store.transaction(async (client) => {
+        const duplicate = await client.query(
+          `SELECT 1 FROM customer_tiers WHERE workspace_id=$1 AND lower(name)=lower($2) AND id<>$3`,
+          [current.user.workspaceId, parsed.data.name, c.req.param("id")],
+        );
+        if (duplicate.rowCount)
+          throw Object.assign(new Error("A tier with this name already exists."), { status: 409, code: "TIER_EXISTS" });
+        const result = await client.query(
+          `UPDATE customer_tiers SET name=$3,overdue_risk=$4,version=version+1,updated_at=now()
+           WHERE id=$1 AND workspace_id=$2 AND version=$5 RETURNING id,version`,
+          [c.req.param("id"), current.user.workspaceId, parsed.data.name, parsed.data.overdueRisk, parsed.data.expectedVersion],
+        );
+        if (!result.rowCount)
+          throw Object.assign(new Error("Tier changed on another device."), { status: 409, code: "VERSION_CONFLICT" });
+        await client.query(
+          `INSERT INTO discount_policies(workspace_id,tier_id,category_id,ceiling_bps)
+           SELECT $1,$2,id,$3 FROM product_categories WHERE workspace_id=$1
+           ON CONFLICT(workspace_id,tier_id,category_id) DO UPDATE SET ceiling_bps=EXCLUDED.ceiling_bps`,
+          [current.user.workspaceId, c.req.param("id"), parsed.data.discountCeilingBps],
+        );
+        await writeChange(client, current.user.workspaceId, "tier", c.req.param("id"), result.rows[0].version);
+        await writeAudit(client, current, "tier.updated", { tierId: c.req.param("id") });
+      });
+      const tiers = await listCustomerTiers(store, current.user.workspaceId);
+      return c.json({ data: tiers.find((tier) => tier.id === c.req.param("id")) });
+    } catch (error) {
+      return c.json({ error: error.message ?? "Could not update tier.", code: error.code ?? "TIER_UPDATE_FAILED" }, error.status ?? 500);
+    }
+  });
+
+  app.delete("/api/admin/tiers/:id", auth.capability("catalog.manage"), async (c) => {
+    const unavailable = dbRequired(c, store);
+    if (unavailable) return unavailable;
+    const parsed = z.object({
+      expectedVersion: z.number().int().positive(),
+      replacementTierId: uuid.optional(),
+    }).safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success)
+      return c.json({ error: "Invalid tier version.", code: "INVALID_INPUT" }, 400);
+    const current = c.get("auth");
+    try {
+      await store.transaction(async (client) => {
+        const usage = await client.query(
+          `SELECT count(*)::int AS count FROM customers WHERE workspace_id=$1 AND tier_id=$2`,
+          [current.user.workspaceId, c.req.param("id")],
+        );
+        const customerCount = number(usage.rows[0]?.count);
+        if (customerCount) {
+          if (!parsed.data.replacementTierId || parsed.data.replacementTierId === c.req.param("id"))
+            throw Object.assign(new Error("Choose another tier for assigned customers."), { status: 409, code: "REPLACEMENT_TIER_REQUIRED" });
+          const replacement = await client.query(
+            `SELECT 1 FROM customer_tiers WHERE id=$1 AND workspace_id=$2`,
+            [parsed.data.replacementTierId, current.user.workspaceId],
+          );
+          if (!replacement.rowCount)
+            throw Object.assign(new Error("Replacement tier not found."), { status: 404, code: "REPLACEMENT_TIER_NOT_FOUND" });
+          await client.query(
+            `UPDATE customers SET tier_id=$3,version=version+1,updated_at=now() WHERE workspace_id=$1 AND tier_id=$2`,
+            [current.user.workspaceId, c.req.param("id"), parsed.data.replacementTierId],
+          );
+        }
+        const result = await client.query(
+          `DELETE FROM customer_tiers WHERE id=$1 AND workspace_id=$2 AND version=$3 RETURNING id`,
+          [c.req.param("id"), current.user.workspaceId, parsed.data.expectedVersion],
+        );
+        if (!result.rowCount)
+          throw Object.assign(new Error("Tier changed on another device."), { status: 409, code: "VERSION_CONFLICT" });
+        await writeChange(client, current.user.workspaceId, "tier", c.req.param("id"), parsed.data.expectedVersion + 1, "delete");
+        await writeAudit(client, current, "tier.deleted", {
+          tierId: c.req.param("id"),
+          reassignedCustomers: customerCount,
+          replacementTierId: parsed.data.replacementTierId ?? null,
+        });
+      });
+      return c.json({ data: { id: c.req.param("id") } });
+    } catch (error) {
+      return c.json({ error: error.message ?? "Could not delete tier.", code: error.code ?? "TIER_DELETE_FAILED" }, error.status ?? 500);
+    }
   });
 
   app.get("/api/admin/teams", auth.capability("teams.manage"), async (c) => {

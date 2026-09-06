@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import {
   AlertTriangle,
+  ArrowLeft,
   ArrowRight,
   BadgeIndianRupee,
   Boxes,
@@ -12,12 +13,16 @@ import {
   Filter,
   PackageCheck,
   Pause,
+  Pencil,
   Play,
+  Plus,
   ReceiptIndianRupee,
   Search,
   Send,
   Sparkles,
+  Tags,
   TrendingUp,
+  Trash2,
   Warehouse,
   X,
 } from "lucide-react";
@@ -130,11 +135,17 @@ function ErrorText({ value }: { value: string }) {
 export function QuotationsView({ focusId, focusRequest }: SearchFocusProps) {
   const { data, connection, role, run } = useWorkspace();
   const canEdit = role !== "finance_ops";
+  const canShareCustomerLink = ["admin", "sales_rep", "sales_manager"].includes(role);
   const quotations = data.quotes;
+  const tiers = data.tiers ?? [];
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const [tierPanelOpen, setTierPanelOpen] = useState(false);
+  const [tierEditor, setTierEditor] = useState<Row | "new" | null>(null);
+  const [confirmTierDelete, setConfirmTierDelete] = useState(false);
+  const [replacementTierId, setReplacementTierId] = useState("");
   const [error, setError] = useState("");
   const [portalLink, setPortalLink] = useState("");
   const selected = quotations.find((quote) => quote.id === selectedId);
@@ -195,18 +206,75 @@ export function QuotationsView({ focusId, focusRequest }: SearchFocusProps) {
   };
   const createPortalLink = async () => {
     if (!selected) return;
+    setError("");
     try {
       const result = await run(() =>
-        mutate<{ data: { link: string } }>(
+        mutate<{ data: { link: string; delivered: boolean } }>(
           `/api/quotes/${selected.id}/portal-link`,
           "POST",
         ),
       );
       setPortalLink(result.data.link);
-    } catch (caught) {
-      setError(
-        caught instanceof Error ? caught.message : "Could not create link.",
+      showToast(
+        result.data.delivered ? "Customer link emailed." : "Customer link ready to copy.",
+        "success",
       );
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : "Could not create link.";
+      setError(message);
+      showToast(message, "error");
+    }
+  };
+  const copyPortalLink = async () => {
+    try {
+      await navigator.clipboard.writeText(portalLink);
+      showToast("Customer link copied.", "success");
+    } catch {
+      showToast("Could not copy the link.", "error");
+    }
+  };
+  const saveTier = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const payload = {
+      name: text(form.get("name")).trim(),
+      overdueRisk: Number(form.get("overdueRisk")),
+      discountCeilingBps: Math.round(Number(form.get("discountCeiling")) * 100),
+      ...(tierEditor !== "new" ? { expectedVersion: amount(tierEditor?.version) } : {}),
+    };
+    try {
+      await run(() => mutate(
+        tierEditor === "new" ? "/api/admin/tiers" : `/api/admin/tiers/${tierEditor?.id}`,
+        tierEditor === "new" ? "POST" : "PATCH",
+        payload,
+      ));
+      showToast(tierEditor === "new" ? "Tier created." : "Tier updated.", "success");
+      setTierEditor(null);
+      setConfirmTierDelete(false);
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : "Could not save tier.";
+      setError(message);
+      showToast(message, "error");
+    }
+  };
+  const deleteTier = async () => {
+    if (!tierEditor || tierEditor === "new") return;
+    if (!confirmTierDelete) {
+      setConfirmTierDelete(true);
+      return;
+    }
+    try {
+      await run(() => mutate(`/api/admin/tiers/${tierEditor.id}`, "DELETE", {
+        expectedVersion: amount(tierEditor.version),
+        ...(replacementTierId ? { replacementTierId } : {}),
+      }));
+      showToast("Tier deleted.", "success");
+      setTierEditor(null);
+      setConfirmTierDelete(false);
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : "Could not delete tier.";
+      setError(message);
+      showToast(message, "error");
     }
   };
   const addSuggestion = async (suggestion: Row) => {
@@ -232,14 +300,23 @@ export function QuotationsView({ focusId, focusRequest }: SearchFocusProps) {
         title="Quotations"
         description="Build, govern, and track every customer offer."
         action={canEdit ? (
-          <button
-            type="button"
-            className="primary-action"
-            disabled={connection !== "online"}
-            onClick={() => setCreateOpen(true)}
-          >
-            <FilePlus2 size={17} /> New quotation
-          </button>
+          <div className="page-action-group">
+            {role === "admin" && <button
+              type="button"
+              className="secondary-action"
+              onClick={() => { setTierPanelOpen(true); setTierEditor(null); setReplacementTierId(""); setError(""); }}
+            >
+              <Tags size={17} /> Manage tiers
+            </button>}
+            <button
+              type="button"
+              className="primary-action"
+              disabled={connection !== "online"}
+              onClick={() => setCreateOpen(true)}
+            >
+              <FilePlus2 size={17} /> New quotation
+            </button>
+          </div>
         ) : undefined}
       />
       <section className="data-panel">
@@ -299,6 +376,84 @@ export function QuotationsView({ focusId, focusRequest }: SearchFocusProps) {
           ))}
         </div>
       </section>
+      <Modal
+        open={tierPanelOpen}
+        title={tierEditor ? (tierEditor === "new" ? "New customer tier" : `Edit ${text(tierEditor.name)}`) : "Customer tiers"}
+        eyebrow="Pricing governance"
+        onClose={() => {
+          setTierPanelOpen(false);
+          setTierEditor(null);
+          setConfirmTierDelete(false);
+          setReplacementTierId("");
+          setError("");
+        }}
+        size="wide"
+      >
+        {tierEditor ? (
+          <form className="modal-form tier-editor" key={tierEditor === "new" ? "new" : text(tierEditor.id)} onSubmit={saveTier}>
+            <button type="button" className="tier-editor-back" onClick={() => { setTierEditor(null); setConfirmTierDelete(false); setReplacementTierId(""); setError(""); }}>
+              <ArrowLeft size={16} /> All tiers
+            </button>
+            <div className="form-columns">
+              <label>
+                <span>Tier name</span>
+                <input name="name" maxLength={40} defaultValue={tierEditor === "new" ? "" : text(tierEditor.name)} placeholder="e.g. Platinum" required />
+              </label>
+              <label>
+                <span>Overdue risk score</span>
+                <input name="overdueRisk" type="number" min="0" max="100" defaultValue={tierEditor === "new" ? 10 : amount(tierEditor.overdueRisk)} required />
+              </label>
+            </div>
+            <label>
+              <span>Maximum standard discount</span>
+              <input name="discountCeiling" type="number" min="0" max="100" step="0.1" defaultValue={tierEditor === "new" ? 5 : amount(tierEditor.discountCeilingBps) / 100} required />
+            </label>
+            <div className="form-note">
+              <Tags size={17} />
+              <span>Discounts above this ceiling enter the approval route. Overdue risk contributes to the deal score.</span>
+            </div>
+            {tierEditor !== "new" && amount(tierEditor.customerCount) > 0 && <label>
+              <span>Move {text(tierEditor.customerCount)} assigned customers to</span>
+              <CustomSelect
+                ariaLabel="Replacement customer tier"
+                value={replacementTierId}
+                onChange={setReplacementTierId}
+                options={tiers
+                  .filter((tier) => text(tier.id) !== text(tierEditor.id))
+                  .map((tier) => ({ value: text(tier.id), label: text(tier.name), detail: `${text(tier.customerCount)} customers` }))}
+              />
+            </label>}
+            <ErrorText value={error} />
+            <div className="modal-actions split">
+              {tierEditor !== "new" ? <button type="button" className="danger-action" disabled={connection !== "online" || (amount(tierEditor.customerCount) > 0 && !replacementTierId)} onClick={() => void deleteTier()}>
+                <Trash2 size={16} /> {confirmTierDelete ? "Confirm delete" : "Delete tier"}
+              </button> : <span />}
+              <button type="submit" className="primary-action" disabled={connection !== "online"}>
+                {tierEditor === "new" ? "Create tier" : "Save changes"}
+              </button>
+            </div>
+          </form>
+        ) : (
+          <div className="tier-manager">
+            <div className="tier-manager-toolbar">
+              <span>{tiers.length} available tiers</span>
+              <button type="button" className="primary-action" disabled={connection !== "online"} onClick={() => { setTierEditor("new"); setError(""); }}>
+                <Plus size={16} /> Add tier
+              </button>
+            </div>
+            <div className="tier-manager-list">
+              {tiers.map((tier) => <button type="button" key={text(tier.id)} onClick={() => { setTierEditor(tier); setReplacementTierId(text(tiers.find((candidate) => text(candidate.id) !== text(tier.id))?.id)); setConfirmTierDelete(false); setError(""); }}>
+                <span className="record-icon"><Tags size={17} /></span>
+                <span><strong>{text(tier.name)}</strong><small>{text(tier.customerCount)} customers</small></span>
+                <span><strong>{(amount(tier.discountCeilingBps) / 100).toFixed(1)}%</strong><small>Discount ceiling</small></span>
+                <span><strong>{text(tier.overdueRisk)}/100</strong><small>Overdue risk</small></span>
+                <Pencil size={16} />
+              </button>)}
+              {!tiers.length && <EmptyState title="No customer tiers" />}
+            </div>
+          </div>
+        )}
+      </Modal>
       <Modal
         open={createOpen}
         title="New quotation"
@@ -419,6 +574,26 @@ export function QuotationsView({ focusId, focusRequest }: SearchFocusProps) {
                 </strong>
               </div>
             </div>
+            <dl className="signal-detail-list">
+              <div><dt>Sales team</dt><dd>{text(selected.team)}</dd></div>
+              <div><dt>Customer tier</dt><dd>{text(selected.tier)}</dd></div>
+              <div><dt>Valid until</dt><dd>{new Date(text(selected.validUntil)).toLocaleDateString()}</dd></div>
+              <div><dt>Approval route</dt><dd>{((selected.approvalRoute as string[]) ?? []).length ? ((selected.approvalRoute as string[]) ?? []).map(titleCase).join(" → ") : "Automatic"}</dd></div>
+            </dl>
+            <section className="detail-section">
+              <header><strong>Line items</strong><span>{((selected.lines as Row[]) ?? []).length} products</span></header>
+              <div className="quotation-line-list">
+                {((selected.lines as Row[]) ?? []).map((line) => {
+                  const lineTotal = amount(line.unitPriceMinor) * amount(line.quantity) * (1 - amount(line.discountBps) / 10000);
+                  return <article key={text(line.id)}>
+                    <span><strong>{text(line.product)}</strong><small>{text(line.sku)} · {titleCase(line.billingType)}</small></span>
+                    <span><small>Quantity</small><strong>{text(line.quantity)}</strong></span>
+                    <span><small>Discount</small><strong>{(amount(line.discountBps) / 100).toFixed(1)}%</strong></span>
+                    <span><small>Line value</small><strong>{formatMoney(lineTotal)}</strong></span>
+                  </article>;
+                })}
+              </div>
+            </section>
             <div className="suggestion-card">
               <Sparkles size={19} />
               <div>
@@ -441,7 +616,7 @@ export function QuotationsView({ focusId, focusRequest }: SearchFocusProps) {
                 <button
                   type="button"
                   className="secondary-action"
-                  onClick={() => navigator.clipboard.writeText(portalLink)}
+                  onClick={() => void copyPortalLink()}
                 >
                   Copy
                 </button>
@@ -449,13 +624,13 @@ export function QuotationsView({ focusId, focusRequest }: SearchFocusProps) {
             )}
             <ErrorText value={error} />
             <div className="modal-actions">
-              {canEdit && text(selected.status) === "approved" && <button
+              {canShareCustomerLink && text(selected.status) === "approved" && <button
                 type="button"
                 className="secondary-action"
                 disabled={connection !== "online"}
                 onClick={createPortalLink}
               >
-                Customer link
+                Share with customer
               </button>}
               {canEdit && ["draft", "negotiation"].includes(text(selected.status)) && (
                 <button
@@ -582,6 +757,19 @@ export function ApprovalsView({ focusId, focusRequest }: SearchFocusProps) {
       >
         {selected && (
           <div className="detail-stack">
+            <div className="detail-hero">
+              <div>
+                <span>Customer</span>
+                <h3>{text(selected.customer)}</h3>
+                <p>{text(selected.owner)} · {text(selected.team)} · Revision {text(selected.revision)}</p>
+              </div>
+              <StatusPill value={selected.stage} />
+            </div>
+            <div className="detail-metrics">
+              <div><span>Quote value</span><strong>{formatMoney(selected.totalMinor)}</strong></div>
+              <div><span>Live margin</span><strong>{(amount(selected.marginBps) / 100).toFixed(1)}%</strong></div>
+              <div><span>Discount</span><strong>{formatMoney(selected.discountMinor)}</strong></div>
+            </div>
             <div className="risk-score">
               <span>Blended risk</span>
               <strong>{text(selected.riskScore)}</strong>
@@ -590,9 +778,15 @@ export function ApprovalsView({ focusId, focusRequest }: SearchFocusProps) {
               </div>
             </div>
             <div className="decision-reason">
-              <strong>{titleCase(selected.stage)} approval</strong>
-              <p>The decision is recorded in the immutable audit trail.</p>
+              <strong>{titleCase(selected.stage)} decision</strong>
+              <p>{text(selected.reason) || `${text(selected.tier)} customer · ${titleCase(selected.quoteStatus)} quotation`}</p>
             </div>
+            <dl className="signal-detail-list">
+              <div><dt>Stage</dt><dd>{titleCase(selected.stage)}</dd></div>
+              <div><dt>Customer tier</dt><dd>{text(selected.tier)}</dd></div>
+              <div><dt>Submitted</dt><dd>{new Date(text(selected.createdAt)).toLocaleString()}</dd></div>
+              <div><dt>Audit</dt><dd>Decision recorded</dd></div>
+            </dl>
             <ErrorText value={error} />
             <div className="modal-actions split">
               <button
@@ -963,11 +1157,10 @@ export function InvoicesView({ focusId, focusRequest }: SearchFocusProps) {
               <button
                 type="button"
                 className="row-action"
-                disabled={connection !== "online" || item.status === "paid"}
                 onClick={() => setSelectedId(text(item.id))}
               >
                 <CheckCircle2 size={15} />
-                {item.status === "paid" ? "Paid" : "Record payment"}
+                {item.status === "paid" ? "View details" : "Manage"}
               </button>
             </div>
           ))}
@@ -997,39 +1190,41 @@ export function InvoicesView({ focusId, focusRequest }: SearchFocusProps) {
       </Modal>
       <Modal
         open={Boolean(selected)}
-        title="Record payment"
-        eyebrow="Internal ledger"
-        onClose={() => setSelectedId(null)}
+        title={selected ? `INV-${text(selected.invoiceNumber).padStart(4, "0")}` : "Invoice"}
+        eyebrow="Invoice detail"
+        onClose={() => { setSelectedId(null); setError(""); }}
       >
         {selected && (
           <form className="modal-form" onSubmit={pay}>
-            <label>
-              <span>Amount</span>
-              <input
-                name="amount"
-                type="number"
-                min="0.01"
-                step="0.01"
-                inputMode="decimal"
-                max={
-                  (amount(selected.totalMinor) - amount(selected.paidMinor)) /
-                  100
-                }
-                defaultValue={
-                  (amount(selected.totalMinor) - amount(selected.paidMinor)) /
-                  100
-                }
-                required
-              />
-            </label>
-            <label>
-              <span>Reference</span>
-              <input
-                name="reference"
-                placeholder="Bank or receipt reference"
-                required
-              />
-            </label>
+            <div className="detail-hero">
+              <div><span>Customer</span><h3>{text(selected.customer)}</h3><p>Due {new Date(text(selected.dueOn)).toLocaleDateString()}</p></div>
+              <StatusPill value={selected.status} />
+            </div>
+            <div className="detail-metrics">
+              <div><span>Invoice total</span><strong>{formatMoney(selected.totalMinor)}</strong></div>
+              <div><span>Paid</span><strong>{formatMoney(selected.paidMinor)}</strong></div>
+              <div><span>Outstanding</span><strong>{formatMoney(amount(selected.totalMinor) - amount(selected.paidMinor))}</strong></div>
+            </div>
+            {amount(selected.totalMinor) - amount(selected.paidMinor) > 0 ? <>
+              <div className="detail-section-heading"><strong>Record payment</strong><span>INR</span></div>
+              <label>
+                <span>Amount</span>
+                <input
+                  name="amount"
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  inputMode="decimal"
+                  max={(amount(selected.totalMinor) - amount(selected.paidMinor)) / 100}
+                  defaultValue={(amount(selected.totalMinor) - amount(selected.paidMinor)) / 100}
+                  required
+                />
+              </label>
+              <label>
+                <span>Reference</span>
+                <input name="reference" placeholder="Bank or receipt reference" required />
+              </label>
+            </> : <div className="form-note"><CheckCircle2 size={17} /><span>This invoice is fully paid. Its payment history remains available in the ledger.</span></div>}
             <ErrorText value={error} />
             <div className="modal-actions">
               <button
@@ -1037,11 +1232,11 @@ export function InvoicesView({ focusId, focusRequest }: SearchFocusProps) {
                 className="secondary-action"
                 onClick={() => setSelectedId(null)}
               >
-                Cancel
+                Close
               </button>
-              <button type="submit" className="primary-action">
+              {amount(selected.totalMinor) - amount(selected.paidMinor) > 0 && <button type="submit" className="primary-action" disabled={connection !== "online"}>
                 Record payment
-              </button>
+              </button>}
             </div>
           </form>
         )}
